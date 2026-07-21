@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>受験クエストOS v2(自動版・GitHub連携あり)</title>
+<title>受験クエストOS v2(手動版・GitHub連携なし)</title>
 <!--
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-受験クエストOS v2 — 自動版(index.html)
-★このファイルは「GitHubから教材を自動取得する機能」を含みます。
-  含まない版は index-manual-only.html です(このリポジトリに同梱)。
+受験クエストOS v2 — 手動版(index-manual-only.html)
+★このファイルは「GitHubから教材を自動取得する機能」を含みません。
+  教材はすべて「データ」画面へのJSON貼り付けのみで追加します(完全にオフラインで完結)。
+  自動取得つきの版は index.html です(このリポジトリに同梱)。
 ・このファイル1つがアプリ本体です(ビルド不要・ライブラリ不要・オフライン動作)
-・教材は①「データ」画面へのJSON貼り付け、②GitHub連携での自動取得、の2通りで追加します
 ・データはブラウザの localStorage(キー名 "jukenOS1")に保存されます
   (同じオリジン(同じドメイン)で開く限り、自動版と手動版はデータを共有します)
 ・修正を依頼するAIには、このHTMLと docs/AI_HANDOFF.md を一緒に渡してください
@@ -305,8 +305,7 @@ td,th{padding:6px 4px; border-bottom:1px solid #e5eef0; text-align:left;}
 【19】ガチャ ……………… コインで引くコレクション
 【20】親ダッシュボード … 成績表示・出題レンジ設定・PIN・リセット
 【21】データ管理 ………… ★教材JSONの登録(doImport)・★バックアップ
-【22】GitHub連携 ………… ★教材JSONをGitHubから自動取得(publicリポジトリのみ)
-【23】起動 ………………… ページを開いたときに最初に動く処理
+【22】起動 ………………… ページを開いたときに最初に動く処理
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 */
 /* ================= 【1】設定パック(config) =================
@@ -475,7 +474,6 @@ function load(){
   try{ S=JSON.parse(localStorage.getItem(KEY)); }catch(e){ S=null; }
   if(!S||!S.profiles){ S={version:2,activeProfileId:null,profiles:{},packs:{},themes:{},config:null,lastBackup:null,firstUse:today()}; }
   S.version=2; if(!S.firstUse) S.firstUse=today();
-  if(!S.githubSync) S.githubSync={owner:"",repo:"",branch:"main",path:"packs",auto:false,lastSync:null,lastResult:""};
   for(const t of Object.values(BUILTIN_THEMES)) if(!S.themes[t.id]) S.themes[t.id]=t;
   for(const p of SAMPLE_PACKS) if(!S.packs[p.id]) S.packs[p.id]=p;
   for(const id of SAMPLE_PACK_IDS) delete S.packs[id];
@@ -1329,20 +1327,6 @@ function renderData(){
       <textarea id="importBox" placeholder='{"schema":"juken-pack@1", ...}'></textarea>
       <button class="big" onclick="doImport()">登録する</button>
       <div id="importMsg" class="small"></div></div>`;
-    const g=S.githubSync;
-    html+=`<div class="card"><h2>🌐 GitHubから自動取得</h2>
-      <p class="small">GitHubリポジトリの中の教材JSONを、貼り付けなしで取り込みます。
-      リポジトリの ${esc((g.path||"packs"))}/ フォルダに、教材ファイル名を並べた
-      <code>index.json</code>(例: ["a.json","b.json"])と、各教材JSONを置いてください。
-      publicリポジトリのみ対応(privateは読み込めません)。</p>
-      <input type="text" id="ghOwner" placeholder="GitHubユーザー名" value="${esc(g.owner)}">
-      <input type="text" id="ghRepo" placeholder="リポジトリ名" value="${esc(g.repo)}">
-      <input type="text" id="ghBranch" placeholder="ブランチ(空欄でmain)" value="${esc(g.branch||"main")}">
-      <input type="text" id="ghPath" placeholder="フォルダ名(空欄でpacks)" value="${esc(g.path||"packs")}">
-      <label class="check"><input type="checkbox" id="ghAuto" ${g.auto?"checked":""} onchange="saveGithubSettings()">
-        起動するたびに自動で取得する</label>
-      <button class="big" onclick="manualGithubSync()">🌐 設定を保存していますぐ取得</button>
-      <div class="small">${g.lastSync?"最終取得:"+esc(g.lastSync)+" / "+esc(g.lastResult||""):"まだ取得していません"}</div></div>`;
   }else{
     html+=`<div class="card"><h2>📚 教材の追加</h2><p class="small">このエディションでは教材の追加・差し替えはできません(同梱教材のみ)。上位版で解放されます。</p></div>`;
   }
@@ -1415,71 +1399,8 @@ function saveBrand(){ if(!S.config) S.config=JSON.parse(JSON.stringify(DEFAULT_C
   S.config.brand=S.config.brand||{}; S.config.brand.title=document.getElementById("brandIn").value.trim()||"受験クエストOS";
   save(); renderProfiles(); toast("✅ タイトルを保存しました"); }
 
-/* ================= 【22】GitHub連携(★教材の自動取得) =================
-GitHub(publicリポジトリ)から教材JSONを自動で取り込む機能。
-・データ構造:S.githubSync = {owner,repo,branch,path,auto,lastSync,lastResult}
-  (loadの中で初期値を補修している。項目を増やすときも同様に補修すること)
-・取得元の形:https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}/index.json
-  index.json はファイル名の配列(例:["wariai.json","goi.json"])。
-  各ファイルは juken-pack@1 等のスキーマJSON(1個でも配列でもよい)。
-・githubBase() ……… 上記の取得元URLを組み立てる(未設定ならnull)
-・fetchFromGithub(silent) … index.json→各ファイルを順に取得し、importSchemaObject(【21】と共通)で登録
-    silent=trueは起動時の自動実行用。エラーでも通知をうるさくしない
-・saveGithubSettings() … 【21】データ画面の入力値をS.githubSyncへ保存
-・manualGithubSync() …… 保存してから即取得(「今すぐ取得」ボタン用)
-※ CORSの都合上、privateリポジトリは読み込めない(公開リポジトリのみ対応) */
-function githubBase(){
-  const g=S.githubSync;
-  if(!g||!g.owner||!g.repo) return null;
-  const path=(g.path||"packs").replace(/^\/+|\/+$/g,"");
-  return `https://raw.githubusercontent.com/${g.owner}/${g.repo}/${g.branch||"main"}/${path}`;
-}
-async function fetchFromGithub(silent){
-  const base=githubBase();
-  if(!base){ if(!silent) toast("先にGitHubの設定(ユーザー名・リポジトリ名)を入力してください"); return; }
-  try{
-    const idxRes=await fetch(base+"/index.json",{cache:"no-store"});
-    if(!idxRes.ok) throw new Error("index.json が見つかりません(HTTP "+idxRes.status+")");
-    const list=await idxRes.json();
-    if(!Array.isArray(list)) throw new Error("index.json はファイル名の配列にしてください");
-    let done=[],errs=[];
-    for(const fname of list){
-      try{
-        const r=await fetch(base+"/"+fname,{cache:"no-store"});
-        if(!r.ok){ errs.push(fname+": HTTP "+r.status); continue; }
-        const obj=await r.json();
-        for(const o of (Array.isArray(obj)?obj:[obj])){
-          const msg=importSchemaObject(o);
-          if(msg.startsWith("❌")) errs.push(fname+": "+msg); else done.push(msg);
-        }
-      }catch(e){ errs.push(fname+": "+e.message); }
-    }
-    S.githubSync.lastSync=today()+" "+new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"});
-    S.githubSync.lastResult=done.length+"件取得"+(errs.length?"("+errs.length+"件失敗)":"");
-    save(); if(S.activeProfileId){ applyTheme(); updateHud(); }
-    renderProfiles();
-    const dataScr=document.getElementById("scrData");
-    if(dataScr&&dataScr.classList.contains("on")) renderData();
-    if(!silent||done.length||errs.length) toast("🌐 GitHubから"+done.length+"件取得"+(errs.length?"("+errs.length+"件失敗)":""));
-    if(errs.length) console.warn("GitHub同期エラー:",errs);
-  }catch(e){
-    S.githubSync.lastResult="❌ "+e.message; save();
-    if(!silent) toast("❌ GitHub取得に失敗:"+e.message);
-  }
-}
-function saveGithubSettings(){
-  S.githubSync.owner=document.getElementById("ghOwner").value.trim();
-  S.githubSync.repo=document.getElementById("ghRepo").value.trim();
-  S.githubSync.branch=document.getElementById("ghBranch").value.trim()||"main";
-  S.githubSync.path=document.getElementById("ghPath").value.trim()||"packs";
-  S.githubSync.auto=document.getElementById("ghAuto").checked;
-  save(); toast("✅ GitHub設定を保存しました");
-}
-function manualGithubSync(){ saveGithubSettings(); fetchFromGithub(false); }
-
-/* ================= 【23】起動 =================
-load()→プロフィールがあれば続きから、1人もいなければウィザードへ。
-起動の最後に、githubSync.auto が有効ならGitHubからの自動取得を(邪魔にならないよう)裏で走らせる */
+/* ================= 【22】起動 =================
+load()→プロフィールがあれば続きから、1人もいなければウィザードへ */
 load();
 renderProfiles();
 if(S.activeProfileId&&S.profiles[S.activeProfileId]){
@@ -1489,7 +1410,6 @@ if(S.activeProfileId&&S.profiles[S.activeProfileId]){
 }else{
   show("scrProfiles");
 }
-if(S.githubSync&&S.githubSync.auto) fetchFromGithub(true);
 </script>
 </body>
 </html>
