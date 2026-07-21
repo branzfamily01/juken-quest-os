@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>受験クエストOS v2</title>
+<!--
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+受験クエストOS v2(サンプル教材なし版)
+・このファイル1つがアプリ本体です(ビルド不要・ライブラリ不要・オフライン動作)
+・教材はアプリ内の「データ」画面から教材JSONを貼り付けて追加します
+・データはブラウザの localStorage(キー名 "jukenOS1")に保存されます
+・修正を依頼するAIには、このHTMLと AI_HANDOFF.md を一緒に渡してください
+・コード内の【セクションN】コメントが目次と対応しています
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-->
+<style>
+/* ここの色は「初期値」。実際の色はテーマ(セクション2)が上書きするので、
+   色を変えたいときはCSSではなくテーマの colors を直すこと */
+:root{
+  --bg:#EAF7F8; --card:#fff; --primary:#3FB6BC; --accent:#F49AC1;
+  --text:#2A4A52; --ok:#41BE8A; --ng:#F2789F; --gold:#F5C445;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+body{margin:0; font-family:"Hiragino Maru Gothic ProN","BIZ UDGothic","Yu Gothic",sans-serif;
+  background:var(--bg); color:var(--text); font-size:16px; line-height:1.6;}
+#app{max-width:520px; margin:0 auto; min-height:100vh; padding:12px 14px 90px;}
+.screen{display:none; animation:fadein .25s;}
+.screen.on{display:block;}
+@keyframes fadein{from{opacity:0; transform:translateY(6px);} to{opacity:1;}}
+@keyframes pop{0%{transform:scale(.6);} 70%{transform:scale(1.15);} 100%{transform:scale(1);}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important; transition:none!important;}}
+
+.card{background:var(--card); border-radius:20px; padding:16px; margin:10px 0;
+  box-shadow:0 3px 10px rgba(0,0,0,.07);}
+h1{font-size:1.3em; margin:.4em 0;}
+h2{font-size:1.08em; margin:.3em 0;}
+.small{font-size:.82em; opacity:.75;}
+.center{text-align:center;}
+
+button{font-family:inherit; font-size:1em; border:none; cursor:pointer; color:#fff;
+  background:var(--primary); border-radius:16px; padding:13px 18px;
+  box-shadow:0 4px 0 rgba(0,0,0,.15); font-weight:bold;}
+button:active{transform:translateY(3px); box-shadow:0 1px 0 rgba(0,0,0,.15);}
+button:focus-visible{outline:3px solid var(--gold);}
+button.big{width:100%; font-size:1.1em; padding:16px; margin:6px 0;}
+button.sub{background:#fff; color:var(--text); border:2px solid var(--primary); box-shadow:none;}
+button.ghost{background:transparent; color:var(--text); box-shadow:none; text-decoration:underline; padding:6px;}
+button.accent{background:var(--accent);}
+button:disabled{opacity:.45;}
+button.pill{border-radius:99px; padding:8px 14px; margin:3px; font-size:.92em;}
+button.pill.off{background:#fff; color:var(--text); border:2px solid #cfdde0; box-shadow:none;}
+
+#hud{display:none; position:sticky; top:0; z-index:5; background:var(--card);
+  border-radius:0 0 18px 18px; padding:8px 12px; margin:-12px -14px 10px;
+  box-shadow:0 2px 8px rgba(0,0,0,.08);}
+#hud .row{display:flex; align-items:center; gap:8px;}
+#hudAvatar{font-size:1.7em;}
+#hudName{font-weight:bold; white-space:nowrap;}
+.xpbar{background:#e6eef0; border-radius:99px; height:12px; overflow:hidden; flex:1;}
+.xpbar>div{height:100%; background:linear-gradient(90deg,var(--primary),var(--accent)); border-radius:99px; transition:width .4s;}
+.pillTag{background:var(--bg); border-radius:99px; padding:2px 10px; font-size:.82em; font-weight:bold; white-space:nowrap;}
+
+#nav{display:none; position:fixed; bottom:0; left:0; right:0; z-index:5;}
+#nav .in{max-width:520px; margin:0 auto; display:flex; background:var(--card);
+  border-radius:22px 22px 0 0; box-shadow:0 -3px 12px rgba(0,0,0,.1);}
+#nav button{flex:1; background:none; color:var(--text); box-shadow:none; border-radius:0;
+  padding:9px 0 12px; font-size:.72em; display:flex; flex-direction:column; align-items:center; gap:2px;}
+#nav button span{font-size:1.7em;}
+
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.modeBtn{border-radius:20px; padding:16px 8px; text-align:center; color:#fff; font-weight:bold;}
+.modeBtn .ic{font-size:2em; display:block;}
+.badgeDot{background:var(--ng); color:#fff; border-radius:99px; font-size:.75em; padding:1px 8px; margin-left:6px;}
+
+.choice{display:block; width:100%; text-align:left; background:#fff; color:var(--text);
+  border:2.5px solid #dfe9ec; border-radius:16px; padding:13px 14px; margin:8px 0;
+  box-shadow:0 3px 0 #dfe9ec; font-size:1.02em;}
+.choice.ok{border-color:var(--ok); background:#eafaf2; box-shadow:0 3px 0 var(--ok);}
+.choice.ng{border-color:var(--ng); background:#fdeef4; box-shadow:0 3px 0 var(--ng);}
+.choice.sel{border-color:var(--primary); background:#eef8f9;}
+.tfWrap{display:flex; gap:10px;}
+.tfWrap .choice{text-align:center; font-size:1.5em; padding:20px 0;}
+.tok{display:inline-block; background:#fff; color:var(--text); border:2.5px solid #dfe9ec;
+  border-radius:14px; padding:9px 13px; margin:4px; box-shadow:0 3px 0 #dfe9ec; font-weight:bold; cursor:pointer;}
+.tok.picked{border-color:var(--primary); background:#eef8f9;}
+.ordArea{min-height:56px; background:var(--bg); border-radius:14px; padding:6px; margin:8px 0;}
+input[type=text],input[type=password],textarea{width:100%; font-family:inherit; font-size:1.05em;
+  border:2.5px solid #dfe9ec; border-radius:14px; padding:12px; background:#fff; color:var(--text);}
+textarea{min-height:140px; font-size:.85em;}
+
+.hpOut{background:#e6eef0; border-radius:99px; height:18px; overflow:hidden; margin:6px 0;}
+.hpIn{height:100%; background:linear-gradient(90deg,#ff9a76,var(--ng)); border-radius:99px; transition:width .4s;}
+.combo{color:var(--gold); font-weight:bold;}
+.tagchip{display:inline-block; background:var(--bg); border-radius:99px; padding:2px 10px; font-size:.78em; margin:2px;}
+.mon{display:flex; align-items:center; gap:10px;}
+.mon .em{font-size:2.2em;}
+.feed{border-radius:16px; padding:12px; margin:10px 0; font-weight:bold;}
+.feed.ok{background:#eafaf2; color:#1c7d55;}
+.feed.ng{background:#fdeef4; color:#c04a72;}
+.expl{background:var(--bg); border-radius:14px; padding:10px 12px; font-size:.92em; font-weight:normal; margin-top:8px;}
+table{width:100%; border-collapse:collapse; font-size:.88em;}
+td,th{padding:6px 4px; border-bottom:1px solid #e5eef0; text-align:left;}
+.rarN{color:#8aa;} .rarR{color:#3a8fd9;} .rarSR{color:#a05ce0;} .rarSSR{color:#e0a020;}
+.toast{position:fixed; left:50%; transform:translateX(-50%); bottom:96px; z-index:9;
+  background:var(--text); color:#fff; border-radius:99px; padding:10px 20px; font-weight:bold;
+  animation:pop .4s; max-width:88%;}
+.check{display:flex; gap:10px; align-items:center; background:var(--bg); border-radius:14px; padding:12px; margin:8px 0;}
+.check input{width:22px; height:22px;}
+.checkS{display:inline-flex; gap:6px; align-items:center; background:var(--bg); border-radius:99px; padding:7px 12px; margin:3px; font-size:.9em;}
+.checkS input{width:19px; height:19px;}
+.profBtn{display:flex; align-items:center; gap:14px; width:100%; background:#fff; color:var(--text);
+  border-radius:22px; padding:16px; margin:10px 0; box-shadow:0 4px 0 rgba(0,0,0,.1); text-align:left;}
+.profBtn .av{font-size:2.4em;}
+.gachaItem{display:inline-block; text-align:center; width:31%; background:var(--bg); border-radius:14px; padding:8px 2px; margin:1%;}
+.gachaItem .em{font-size:1.9em;}
+.locked{filter:grayscale(1); opacity:.35;}
+.themeTile{display:inline-block; width:47%; margin:1.4%; border-radius:18px; padding:14px 6px; text-align:center;
+  border:3px solid transparent; background:#fff; color:var(--text); box-shadow:0 3px 8px rgba(0,0,0,.08); cursor:pointer;}
+.themeTile .em{font-size:2.2em; display:block;}
+.themeTile.sel{border-color:var(--gold);}
+.warn{background:#FFF3D6; border:2px solid var(--gold); border-radius:16px; padding:12px; margin:10px 0; font-size:.92em;}
+</style>
+</head>
+<body>
+<div id="app">
+
+<div id="hud">
+  <div class="row">
+    <span id="hudAvatar">🐬</span>
+    <span id="hudName"></span>
+    <span class="pillTag" id="hudLv"></span>
+    <div class="xpbar"><div id="hudXp" style="width:0%"></div></div>
+    <span class="pillTag">🪙<span id="hudCoin">0</span></span>
+  </div>
+</div>
+
+<!-- P0 プロフィール選択 -->
+<div class="screen" id="scrProfiles">
+  <div class="center" style="margin-top:5vh">
+    <div style="font-size:3.2em">🗺️</div>
+    <h1 id="brandTitle">受験クエストOS</h1>
+    <p class="small">だれが ぼうけんする?</p>
+  </div>
+  <div id="profileList"></div>
+  <button class="big accent" onclick="startWizard()">✨ あたらしい ぼうけんしゃ をつくる</button>
+  <div class="center">
+    <button class="ghost" onclick="renderData();show('scrData')">⚙️ データ管理(親用)</button>
+  </div>
+</div>
+
+<!-- P0b セットアップウィザード -->
+<div class="screen" id="scrWizard">
+  <button class="ghost" onclick="show('scrProfiles')">← やめる</button>
+  <div id="wizBody"></div>
+</div>
+
+<!-- P1 ホーム -->
+<div class="screen" id="scrHome">
+  <div id="homeBackup"></div>
+  <div class="card" id="homeGreet"></div>
+  <div class="card" id="homeQuest"></div>
+  <div class="grid2">
+    <button class="modeBtn" style="background:var(--primary)" onclick="show('scrPacks')"><span class="ic">📚</span>クエストに出る</button>
+    <button class="modeBtn" style="background:var(--accent)" onclick="startReview()"><span class="ic">🔁</span>ふくしゅう<span id="revBadge"></span></button>
+    <button class="modeBtn" style="background:#8f7ae0" onclick="renderMonsters();show('scrMonsters')"><span class="ic">👾</span>モンスター図鑑</button>
+    <button class="modeBtn" style="background:var(--gold)" id="gachaHomeBtn" onclick="renderGacha();show('scrGacha')"><span class="ic">🎁</span>ガチャ</button>
+  </div>
+  <div class="center" style="margin-top:14px">
+    <button class="ghost" onclick="openParent()">👨‍👩‍👧 おうちの人ページ</button>
+    <button class="ghost" onclick="S.activeProfileId=null;save();renderProfiles();show('scrProfiles')">プロフィールをかえる</button>
+  </div>
+</div>
+
+<!-- P2 パック選択 -->
+<div class="screen" id="scrPacks">
+  <button class="ghost" onclick="show('scrHome')">← もどる</button>
+  <h1>📚 クエストをえらぼう</h1>
+  <div id="subjTabs"></div>
+  <div id="packList"></div>
+</div>
+
+<!-- P2b セッション設定(子セレクト) -->
+<div class="screen" id="scrSesSetup">
+  <button class="ghost" onclick="show('scrPacks')">← もどる</button>
+  <h1>⚙️ きょうのセッティング</h1>
+  <div id="sesSetupBody"></div>
+</div>
+
+<!-- P3 INPUT -->
+<div class="screen" id="scrInput">
+  <button class="ghost" onclick="stopFlow();show('scrPacks')">← やめる</button>
+  <h2 id="inputTitle"></h2>
+  <div class="center">
+    <button class="pill sub" id="flowBtn" onclick="toggleFlow()">🎧 きき流しスタート</button>
+    <button class="pill sub" onclick="cycleRate()" id="rateBtn1">🔊 1x</button>
+  </div>
+  <p class="small center" id="inputProg"></p>
+  <div class="card center" id="inputCard" style="min-height:180px; display:flex; flex-direction:column; justify-content:center; font-size:1.15em;"></div>
+  <button class="big" id="inputBtn"></button>
+</div>
+
+<!-- P4 クイズ -->
+<div class="screen" id="scrQuiz">
+  <div id="quizTop"></div>
+  <div class="card">
+    <div class="small" id="quizMeta"></div>
+    <div id="quizText" style="font-size:1.12em; font-weight:bold; margin:8px 0;"></div>
+    <div id="quizBody"></div>
+    <div id="quizFeed"></div>
+  </div>
+  <div id="quizActions"></div>
+</div>
+
+<!-- P5 WRITE -->
+<div class="screen" id="scrWrite">
+  <button class="ghost" onclick="show('scrPacks')">← もどる</button>
+  <h2 id="writeTitle"></h2>
+  <div class="card" id="writeBody"></div>
+</div>
+
+<!-- P6 結果 -->
+<div class="screen" id="scrResult">
+  <div class="card center" id="resultBody"></div>
+  <button class="big" onclick="renderHome();show('scrHome')">ホームへ</button>
+</div>
+
+<!-- P7 モンスター図鑑 -->
+<div class="screen" id="scrMonsters">
+  <button class="ghost" onclick="show('scrHome')">← もどる</button>
+  <h1>👾 モンスター図鑑</h1>
+  <div id="monsterBody"></div>
+</div>
+
+<!-- P8 ガチャ -->
+<div class="screen" id="scrGacha">
+  <button class="ghost" onclick="show('scrHome')">← もどる</button>
+  <h1>🎁 ガチャ</h1>
+  <div id="gachaBody"></div>
+</div>
+
+<!-- P9 親ダッシュボード -->
+<div class="screen" id="scrParent">
+  <button class="ghost" onclick="show('scrHome')">← もどる</button>
+  <h1>👨‍👩‍👧 おうちの人ページ</h1>
+  <div id="parentBody"></div>
+</div>
+
+<!-- P10 データ管理 -->
+<div class="screen" id="scrData">
+  <button class="ghost" onclick="show(S.activeProfileId?'scrHome':'scrProfiles')">← もどる</button>
+  <h1>⚙️ データ管理</h1>
+  <div id="dataBody"></div>
+</div>
+
+</div>
+<div id="nav"><div class="in">
+  <button onclick="renderHome();show('scrHome')"><span>🏠</span>ホーム</button>
+  <button onclick="show('scrPacks')"><span>📚</span>クエスト</button>
+  <button onclick="startReview()"><span>🔁</span>ふくしゅう</button>
+  <button onclick="renderMonsters();show('scrMonsters')"><span>👾</span>図鑑</button>
+  <button onclick="renderData();show('scrData')"><span>⚙️</span>データ</button>
+</div></div>
+
+<script>
+"use strict";
+/*
+━━━━━━━━━━━━━━━ コードの目次(この順に並んでいます)━━━━━━━━━━━━━━━
+【1】設定パック config …… play/custom/platform版の切り替え・XP倍率・ガチャ確率
+【2】テーマ10種 ………… ★キャラクター・世界観・配色・ガチャ景品の追加はここ
+【3】サンプル教材 ……… この版では空。教材は本体に入れず、JSON貼り付けで追加する方針
+【4】バッジ・共通定数 … バッジ一覧・復習間隔・読み上げ速度・★出題形式の名前一覧
+【5】状態管理 …………… localStorage の読み書き(★成績データの保存場所)
+【6】TTS(聞くモード) … 読み上げ・速度切り替え
+【7】レベル・XP ………… レベル計算式・XP付与・バッジ付与
+【8】テーマ適用・HUD … 画面上部バー・画面切り替え
+【9】セットアップウィザード … 新しい子ども(プロフィール)を作る流れ
+【10】プロフィール選択 … 起動時の「だれがぼうけんする?」画面
+【11】ホーム ……………… 今日のクエスト・バックアップ警告バナー
+【12】パック選択 ………… ★教科タブの追加はここ(SUBJECTS配列)
+【13】子セレクト ………… TRAIN開始前の「きょうのセッティング」
+【14】INPUT ……………… 暗記カードめくり+きき流し自動再生
+【15】クイズエンジン …… ★出題形式(6形式)の本体。形式追加はここが中心
+【16】REVIEW ……………… 復習(ライトナー式・期限が来た問題を出す)
+【17】WRITE ……………… 紙でやる手書き課題のチェックリスト
+【18】モンスター・弱点 … 間違いモンスター図鑑・弱点タグ判定
+【19】ガチャ ……………… コインで引くコレクション
+【20】親ダッシュボード … 成績表示・出題レンジ設定・PIN・リセット
+【21】データ管理 ………… ★教材JSONの登録(doImport)・★バックアップ
+【22】起動 ………………… ページを開いたときに最初に動く処理
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+*/
+/* ================= 【1】設定パック(config) =================
+販売エディション(play/custom/platform)や機能ON/OFFの初期値。
+・DEFAULT_CONFIG … このHTMLに焼き込まれた初期設定。販売版を作るときはここを書き換える
+・CFG() ………… 「今有効な設定」を返す関数。ユーザーがconfigJSONを貼るとそちらが優先
+※XP倍率(xpRate)・ガチャ確率(gachaRates)・親レンジ初期値もここ */
+const DEFAULT_CONFIG={schema:"juken-config@1",edition:"custom",
+ brand:{title:"受験クエストOS",logoEmoji:"🗺️"},
+ flags:{canAddMaterial:true,canEditTheme:true,canBrand:false,gachaEnabled:true},
+ balance:{xpRate:1.0,gachaRates:{N:70,R:22,SR:6,SSR:2},dailyGoalDefault:10},
+ parentRange:{levels:[1,2,3],counts:[5,10,15],formats:["choice","truefalse","multi","order","flashcard"]}};
+function CFG(){ const c=S&&S.config?S.config:{}; return {
+  edition:c.edition||DEFAULT_CONFIG.edition,
+  brand:Object.assign({},DEFAULT_CONFIG.brand,c.brand||{}),
+  flags:Object.assign({},DEFAULT_CONFIG.flags,c.flags||{}),
+  balance:Object.assign({},DEFAULT_CONFIG.balance,c.balance||{}),
+  parentRange:Object.assign({},DEFAULT_CONFIG.parentRange,c.parentRange||{})}; }
+
+/* ================= 【2】テーマ10種(★キャラ・世界観の追加場所) =================
+1テーマ = 1つの世界観セット。子どもはウィザードでここから選ぶ。
+各テーマの中身:
+  id/name … テーマの識別子と表示名     ship … 機体名の初期候補
+  colors … 配色8色(bg背景/card/primary主色/accent/text/ok正解/ng不正解/gold)
+  chars  … 4キャラ(guide案内役・review復習役・bossボス・reward報酬妖精)
+            guideのcorrect/wrongは正解・不正解時にランダムで出るセリフ
+  monster … 間違いモンスターの絵文字4種と名前の接頭語
+  gacha  … ガチャ景品8個(rarityは N/R/SR/SSR)
+  words  … かけ声(start)と「今日のクエスト」の呼び名(quest)
+【テーマを増やす方法】下の配列に同じ形のオブジェクトを1個足すだけ。
+ ただし現状ウィザードの一覧は BUILTIN_THEMES だけを表示する(詳細はAI_HANDOFF.md) */
+const BUILTIN_THEMES={};
+[
+{id:"theme_space",name:"うちゅうロケット",ship:"コスモス号",
+ colors:{bg:"#E9EDFB",card:"#FFFFFF",primary:"#4A5FC1",accent:"#F5A623",text:"#2B3355",ok:"#3FA35C",ng:"#E05B7A",gold:"#F0B429"},
+ chars:{guide:{name:"ロケットのコスモ",emoji:"🚀",correct:["打ち上げ成功!","光のはやさだ!","ミッションクリア!"],wrong:["軌道しゅうせい!もう一回","再チャレンジ、発射!"]},
+  review:{name:"サテラ",emoji:"🛰️"},boss:{name:"ブラックホール大王",emoji:"🌑"},reward:{name:"スターの精",emoji:"⭐"}},
+ monster:{emoji:["👾","🛸","☄️","🌪️"],prefix:"ダーク"},
+ gacha:[{id:"a1",name:"地球",emoji:"🌍",rarity:"N"},{id:"a2",name:"お月さま",emoji:"🌙",rarity:"N"},{id:"a3",name:"流れ星",emoji:"🌠",rarity:"N"},
+  {id:"a4",name:"ロケット",emoji:"🚀",rarity:"R"},{id:"a5",name:"土星",emoji:"🪐",rarity:"R"},{id:"a6",name:"宇宙飛行士",emoji:"👨‍🚀",rarity:"SR"},
+  {id:"a7",name:"UFO",emoji:"🛸",rarity:"SR"},{id:"a8",name:"ギャラクシー",emoji:"🌌",rarity:"SSR"}],
+ words:{start:"3・2・1、はっしゃ!",quest:"今日のミッション"}},
+{id:"theme_dino",name:"きょうりゅう発掘団",ship:"ダイナソー号",
+ colors:{bg:"#EAF3E3",card:"#FFFFFF",primary:"#5B9E4D",accent:"#D97B29",text:"#33422C",ok:"#3FA35C",ng:"#D9486B",gold:"#E0A020"},
+ chars:{guide:{name:"ブラキオ先生",emoji:"🦕",correct:["ガオー!せいかい!","恐竜級にすごい!","化石級のかしこさ!"],wrong:["まだまだ進化できる!","もう一度ほってみよう"]},
+  review:{name:"カメじい",emoji:"🐢"},boss:{name:"ティラノ大王",emoji:"🦖"},reward:{name:"アンバーの精",emoji:"💎"}},
+ monster:{emoji:["🦴","🌋","🦂","🕸️"],prefix:"ガオガオ"},
+ gacha:[{id:"b1",name:"たまご",emoji:"🥚",rarity:"N"},{id:"b2",name:"化石",emoji:"🦴",rarity:"N"},{id:"b3",name:"ワニ",emoji:"🐊",rarity:"N"},
+  {id:"b4",name:"ブラキオ",emoji:"🦕",rarity:"R"},{id:"b5",name:"プテラ",emoji:"🦅",rarity:"R"},{id:"b6",name:"ティラノ",emoji:"🦖",rarity:"SR"},
+  {id:"b7",name:"火山",emoji:"🌋",rarity:"SR"},{id:"b8",name:"太古のこはく",emoji:"💎",rarity:"SSR"}],
+ words:{start:"はっくつに出発!",quest:"今日のはっくつ"}},
+{id:"theme_car",name:"クルマ・レーシング",ship:"サンダーマシン号",
+ colors:{bg:"#FFF2E2",card:"#FFFFFF",primary:"#E8552F",accent:"#2E63B8",text:"#4A3222",ok:"#3FA35C",ng:"#D9486B",gold:"#E8A61B"},
+ chars:{guide:{name:"レーサーのソニック",emoji:"🏎️",correct:["ナイスドライブ!","トップスピード!","チェッカーフラッグ!"],wrong:["ピットイン!作戦会議だ","つぎのコーナーで勝負!"]},
+  review:{name:"メカニックのボルト",emoji:"🔧"},boss:{name:"キングマシン",emoji:"🏁"},reward:{name:"トロフィーの精",emoji:"🏆"}},
+ monster:{emoji:["🛞","🚧","🌫️","🐢"],prefix:"ガタガタ"},
+ gacha:[{id:"c1",name:"パトカー",emoji:"🚓",rarity:"N"},{id:"c2",name:"しょうぼう車",emoji:"🚒",rarity:"N"},{id:"c3",name:"トラクター",emoji:"🚜",rarity:"N"},
+  {id:"c4",name:"スポーツカー",emoji:"🏎️",rarity:"R"},{id:"c5",name:"バイク",emoji:"🏍️",rarity:"R"},{id:"c6",name:"ヘリコプター",emoji:"🚁",rarity:"SR"},
+  {id:"c7",name:"ビッグトラック",emoji:"🛻",rarity:"SR"},{id:"c8",name:"金のトロフィー",emoji:"🏆",rarity:"SSR"}],
+ words:{start:"エンジンスタート!",quest:"今日のレース"}},
+{id:"theme_ninja",name:"にんじゃ戦国絵巻",ship:"シノビマル",
+ colors:{bg:"#F2EEE4",card:"#FFFFFF",primary:"#4E4A73",accent:"#C9403B",text:"#3A3630",ok:"#3FA35C",ng:"#C9403B",gold:"#D9A521"},
+ chars:{guide:{name:"ニンジャのシノブ",emoji:"🥷",correct:["おみごと!","忍びの才能あり!","一撃ひっちゅう!"],wrong:["しゅぎょうあるのみ!","ドロン!もう一度"]},
+  review:{name:"はにわ博士",emoji:"🗿"},boss:{name:"城のダイマオウ",emoji:"🏯"},reward:{name:"サクラの精",emoji:"🌸"}},
+ monster:{emoji:["👺","💨","🕷️","🌀"],prefix:"ドロン"},
+ gacha:[{id:"d1",name:"かたな",emoji:"🗡️",rarity:"N"},{id:"d2",name:"弓矢",emoji:"🏹",rarity:"N"},{id:"d3",name:"ガマガエル",emoji:"🐸",rarity:"N"},
+  {id:"d4",name:"まきもの",emoji:"📜",rarity:"R"},{id:"d5",name:"お城",emoji:"🏯",rarity:"R"},{id:"d6",name:"軍馬",emoji:"🐎",rarity:"SR"},
+  {id:"d7",name:"鳥居",emoji:"⛩️",rarity:"SR"},{id:"d8",name:"金のかぶと",emoji:"👑",rarity:"SSR"}],
+ words:{start:"さんじょう!",quest:"今日のしゅぎょう"}},
+{id:"theme_robot",name:"ロボット・メカ工場",ship:"ギガロボ号",
+ colors:{bg:"#E9F0F4",card:"#FFFFFF",primary:"#3D7A9E",accent:"#F0B429",text:"#2C3A44",ok:"#3FA35C",ng:"#E05B7A",gold:"#F0B429"},
+ chars:{guide:{name:"ロボのギア",emoji:"🤖",correct:["システム正常!","てんさい回路だ!","フルパワー!"],wrong:["エラーけんしゅつ…再起動!","アップデートしよう"]},
+  review:{name:"レンチのレン",emoji:"🔧"},boss:{name:"メガロボス",emoji:"🦾"},reward:{name:"エネルギーの精",emoji:"🔋"}},
+ monster:{emoji:["👾","🪫","⚙️","🧲"],prefix:"バグバグ"},
+ gacha:[{id:"e1",name:"はぐるま",emoji:"⚙️",rarity:"N"},{id:"e2",name:"ネジ",emoji:"🔩",rarity:"N"},{id:"e3",name:"でんきゅう",emoji:"💡",rarity:"N"},
+  {id:"e4",name:"ロボくん",emoji:"🤖",rarity:"R"},{id:"e5",name:"スーパーPC",emoji:"🖥️",rarity:"R"},{id:"e6",name:"人工衛星",emoji:"🛰️",rarity:"SR"},
+  {id:"e7",name:"パワーアーム",emoji:"🦾",rarity:"SR"},{id:"e8",name:"レアコア",emoji:"💠",rarity:"SSR"}],
+ words:{start:"きどう!",quest:"今日のプログラム"}},
+{id:"theme_ocean",name:"うみのぼうけん",ship:"マーメイド号",
+ colors:{bg:"#EAF7F8",card:"#FFFFFF",primary:"#3FB6BC",accent:"#F49AC1",text:"#2A4A52",ok:"#41BE8A",ng:"#F2789F",gold:"#F5C445"},
+ chars:{guide:{name:"イルカのルカ",emoji:"🐬",correct:["やったね!","すごーい!","てんさい!"],wrong:["おしい!つぎはいけるよ","だいじょうぶ、ゆっくり考えよう"]},
+  review:{name:"ラッコのこん",emoji:"🦦"},boss:{name:"ジンベエ団長",emoji:"🦈"},reward:{name:"真珠の妖精",emoji:"🫧"}},
+ monster:{emoji:["🦑","🐙","🦐","🪼"],prefix:"モヤモヤ"},
+ gacha:[{id:"f1",name:"クマノミ",emoji:"🐠",rarity:"N"},{id:"f2",name:"カメさん",emoji:"🐢",rarity:"N"},{id:"f3",name:"ヒトデ",emoji:"⭐",rarity:"N"},
+  {id:"f4",name:"マンボウ",emoji:"🐡",rarity:"R"},{id:"f5",name:"アザラシ",emoji:"🦭",rarity:"R"},{id:"f6",name:"クジラ",emoji:"🐋",rarity:"SR"},
+  {id:"f7",name:"人魚のティアラ",emoji:"👑",rarity:"SR"},{id:"f8",name:"にじいろ真珠",emoji:"🫧",rarity:"SSR"}],
+ words:{start:"ぼうけんに出発!",quest:"今日のミッション"}},
+{id:"theme_sweets",name:"スイーツ・カフェ",ship:"スイート号",
+ colors:{bg:"#FFF0F3",card:"#FFFFFF",primary:"#E87A9F",accent:"#8A5A3B",text:"#553844",ok:"#41BE8A",ng:"#E05B7A",gold:"#F0B429"},
+ chars:{guide:{name:"カップケーキのミルフィー",emoji:"🧁",correct:["あまーい正解!","スイート!","シェフのうでまえ!"],wrong:["ちょっとこげちゃった…もう一回!","あじ見してみよう"]},
+  review:{name:"ドーナツのあん",emoji:"🍩"},boss:{name:"ケーキキング",emoji:"🎂"},reward:{name:"キャンディの精",emoji:"🍬"}},
+ monster:{emoji:["🍪","🍮","🧂","🫠"],prefix:"コゲコゲ"},
+ gacha:[{id:"g1",name:"ドーナツ",emoji:"🍩",rarity:"N"},{id:"g2",name:"クッキー",emoji:"🍪",rarity:"N"},{id:"g3",name:"いちご",emoji:"🍓",rarity:"N"},
+  {id:"g4",name:"ショートケーキ",emoji:"🍰",rarity:"R"},{id:"g5",name:"チョコ",emoji:"🍫",rarity:"R"},{id:"g6",name:"パフェ",emoji:"🍨",rarity:"SR"},
+  {id:"g7",name:"カップケーキ",emoji:"🧁",rarity:"SR"},{id:"g8",name:"シュガークラウン",emoji:"👑",rarity:"SSR"}],
+ words:{start:"オーブンオン!",quest:"今日のレシピ"}},
+{id:"theme_magic",name:"まほうファンタジー",ship:"ルナ号",
+ colors:{bg:"#F1EBFA",card:"#FFFFFF",primary:"#8A63D2",accent:"#F5C445",text:"#3B3252",ok:"#41BE8A",ng:"#E05B7A",gold:"#F5C445"},
+ chars:{guide:{name:"まほうつかいのルナ",emoji:"🧙‍♀️",correct:["まほう成功!","キラーン!","けんじゃへの一歩!"],wrong:["じゅもんをとなえ直そう","まどうしょをひらこう"]},
+  review:{name:"フクロウのソロン",emoji:"🦉"},boss:{name:"やみのドラゴン",emoji:"🐉"},reward:{name:"星の妖精",emoji:"✨"}},
+ monster:{emoji:["👻","🕯️","🦇","🌫️"],prefix:"ノロイの"},
+ gacha:[{id:"h1",name:"まほうのつえ",emoji:"🪄",rarity:"N"},{id:"h2",name:"まどうしょ",emoji:"📖",rarity:"N"},{id:"h3",name:"ポーション",emoji:"🧪",rarity:"N"},
+  {id:"h4",name:"水晶玉",emoji:"🔮",rarity:"R"},{id:"h5",name:"フクロウ",emoji:"🦉",rarity:"R"},{id:"h6",name:"ユニコーン",emoji:"🦄",rarity:"SR"},
+  {id:"h7",name:"まほうのお城",emoji:"🏰",rarity:"SR"},{id:"h8",name:"けんじゃの石",emoji:"✨",rarity:"SSR"}],
+ words:{start:"まほうの旅へ!",quest:"今日のクエスト"}},
+{id:"theme_animal",name:"どうぶつもふもふ村",ship:"もふもふ号",
+ colors:{bg:"#FBF3E6",card:"#FFFFFF",primary:"#C98A4B",accent:"#7FB069",text:"#4C3B2A",ok:"#3FA35C",ng:"#E05B7A",gold:"#E0A020"},
+ chars:{guide:{name:"ハムスターのもち",emoji:"🐹",correct:["もふもふ大正解!","かしこい!","なでなで〜!"],wrong:["だいじょうぶ、いっしょにがんばろ","もぐもぐ…もう一回!"]},
+  review:{name:"コアラのねむ",emoji:"🐨"},boss:{name:"森のヌシグマ",emoji:"🐻"},reward:{name:"こもれびの精",emoji:"🐾"}},
+ monster:{emoji:["🦫","🐍","🦂","🕳️"],prefix:"イジワル"},
+ gacha:[{id:"i1",name:"いぬ",emoji:"🐶",rarity:"N"},{id:"i2",name:"ねこ",emoji:"🐱",rarity:"N"},{id:"i3",name:"うさぎ",emoji:"🐰",rarity:"N"},
+  {id:"i4",name:"きつね",emoji:"🦊",rarity:"R"},{id:"i5",name:"パンダ",emoji:"🐼",rarity:"R"},{id:"i6",name:"アライグマ",emoji:"🦝",rarity:"SR"},
+  {id:"i7",name:"ナマケモノ",emoji:"🦥",rarity:"SR"},{id:"i8",name:"にじの羽",emoji:"🌈",rarity:"SSR"}],
+ words:{start:"おさんぽ出発!",quest:"今日のおやくそく"}},
+{id:"theme_idol",name:"きらきらアイドル",ship:"キラリン号",
+ colors:{bg:"#FFEFF7",card:"#FFFFFF",primary:"#F062A8",accent:"#7BD3EA",text:"#59314A",ok:"#41BE8A",ng:"#E05B7A",gold:"#F0B429"},
+ chars:{guide:{name:"アイドルのリリカ",emoji:"🎤",correct:["ステージ大成功!","キラキラしてる!","ファンがふえたよ!"],wrong:["リハーサルもう一回!","つぎの曲でキメよう!"]},
+  review:{name:"DJのミミ",emoji:"🎧"},boss:{name:"ライバルクイーン",emoji:"👑"},reward:{name:"ハートの精",emoji:"💖"}},
+ monster:{emoji:["🎭","🥀","🌩️","📢"],prefix:"オンチな"},
+ gacha:[{id:"j1",name:"マイク",emoji:"🎤",rarity:"N"},{id:"j2",name:"リボン",emoji:"🎀",rarity:"N"},{id:"j3",name:"ドレス",emoji:"👗",rarity:"N"},
+  {id:"j4",name:"ギター",emoji:"🎸",rarity:"R"},{id:"j5",name:"ピアノ",emoji:"🎹",rarity:"R"},{id:"j6",name:"スター",emoji:"🌟",rarity:"SR"},
+  {id:"j7",name:"ハート",emoji:"💖",rarity:"SR"},{id:"j8",name:"プラチナマイク",emoji:"💎",rarity:"SSR"}],
+ words:{start:"ステージへGO!",quest:"今日のレッスン"}}
+].forEach(t=>{t.schema="juken-theme@1";BUILTIN_THEMES[t.id]=t;});
+
+/* ================= 【3】サンプル教材(この版では空) =================
+方針:教材は本体HTMLに入れない。教材はアプリの「データ」画面から
+juken-pack@1 のJSONを貼り付けて追加する(登録処理は【21】doImport)。
+SAMPLE_PACK_IDS は、昔のサンプル入り版を使っていたブラウザから
+旧サンプル4教材を起動時に自動削除するための掃除リスト。 */
+const SAMPLE_PACKS=[];
+// サンプル教材を表示しない版。既にブラウザに入っている4つのサンプル教材も起動時に消します。
+const SAMPLE_PACK_IDS=["pack_m5_wariai","pack_j5_goi","pack_r5_suiyoeki","pack_s3_history"];
+
+/* ================= 【4】バッジ・共通定数 =================
+・BADGES ……… バッジの一覧(増やすときはここに追加+付与条件はgrantBadgeを呼ぶ側に書く)
+・INTERVALS … 復習の間隔(日)。box0〜5 に対応(ライトナー式)
+・RATES ……… 読み上げ速度の選択肢
+・FMT_NAMES … ★出題形式の一覧(内部名→子ども向け表示名)。形式を増やすならまずここに追加 */
+const BADGES=[
+ {id:"first_clear",name:"はじめの一歩",emoji:"🌱",desc:"はじめてユニットクリア"},
+ {id:"combo5",name:"コンボの達人",emoji:"⚡",desc:"5連続正解"},
+ {id:"combo10",name:"コンボの神",emoji:"🌟",desc:"10連続正解"},
+ {id:"streak3",name:"3日ぼうずじゃない",emoji:"🔥",desc:"3日連続クエスト達成"},
+ {id:"streak7",name:"1週間の勇者",emoji:"🏅",desc:"7日連続クエスト達成"},
+ {id:"monster5",name:"モンスターハンター",emoji:"⚔️",desc:"モンスター5体討伐"},
+ {id:"boss1",name:"ボスキラー",emoji:"🏆",desc:"ボス初撃破"},
+ {id:"q100",name:"100問マスター",emoji:"💯",desc:"累計100問正解"},
+ {id:"write5",name:"手書きの鉄人",emoji:"✍️",desc:"手書き課題5回完了"}
+];
+const INTERVALS=[0,1,3,7,14,30];
+const RATES=[1,1.5,2,2.5,3];
+// ★出題形式一覧(形式追加の入口)。左=データのqtype、右=画面表示名
+const FMT_NAMES={choice:"4たく",truefalse:"○×",multi:"ぜんぶ選ぶ",order:"ならべかえ",flashcard:"暗記カード",input:"かきこみ"};
+
+/* ================= 【5】状態管理(★成績データの保存場所) =================
+全データは変数 S にまとまり、localStorage(キー"jukenOS1")へJSONで保存される。
+S の中身: profiles(子どもごとの成績・XP・設定) / packs(教材) / themes / config / lastBackup
+・load() ………… 起動時に読み込み+古いデータの補修(マイグレーション)
+・ensureProfile … プロフィールに足りない項目を補う。項目を増やしたらここにも初期値を足すこと
+・save() ………… 保存。データを書き換えたら必ず呼ぶ
+成績の実体は profiles[].itemStats(問題ごとの正解c/不正解w/復習box/次回日next) */
+const KEY="jukenOS1";
+let S=null;
+function load(){
+  try{ S=JSON.parse(localStorage.getItem(KEY)); }catch(e){ S=null; }
+  if(!S||!S.profiles){ S={version:2,activeProfileId:null,profiles:{},packs:{},themes:{},config:null,lastBackup:null,firstUse:today()}; }
+  S.version=2; if(!S.firstUse) S.firstUse=today();
+  for(const t of Object.values(BUILTIN_THEMES)) if(!S.themes[t.id]) S.themes[t.id]=t;
+  for(const p of SAMPLE_PACKS) if(!S.packs[p.id]) S.packs[p.id]=p;
+  for(const id of SAMPLE_PACK_IDS) delete S.packs[id];
+  for(const p of Object.values(S.profiles)) ensureProfile(p);
+  save();
+}
+function ensureProfile(p){
+  const c=CFG();
+  if(p.machineName==null){ const t=S.themes[p.themeId]; p.machineName=(t&&t.ship)||"ぼうけん号"; }
+  if(!S.themes[p.themeId]) p.themeId="theme_ocean";
+  if(!p.range) p.range={levels:c.parentRange.levels.slice(),counts:c.parentRange.counts.slice(),formats:c.parentRange.formats.slice()};
+  if(!p.tts) p.tts={rate:1,auto:false};
+  if(p.dailyGoal==null) p.dailyGoal=c.balance.dailyGoalDefault;
+  for(const[k,v]of Object.entries({xp:0,coins:0,badges:[],collection:{},itemStats:{},monsters:{},history:[],writeLog:[]}))
+    if(p[k]==null) p[k]=Array.isArray(v)?[]:(typeof v==="object"?{}:v);
+  if(!p.daily) p.daily={date:today(),count:0,done:false};
+  if(!p.streak) p.streak={last:null,count:0};
+  return p;
+}
+function save(){ localStorage.setItem(KEY,JSON.stringify(S)); }
+function P(){ return S.profiles[S.activeProfileId]; }
+function T(){ const p=P(); return (p&&S.themes[p.themeId])||Object.values(S.themes)[0]; }
+function today(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function addDays(ds,n){ const d=new Date(ds+"T00:00:00"); d.setDate(d.getDate()+n);
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function daysBetween(a,b){ return Math.round((new Date(b+"T00:00:00")-new Date(a+"T00:00:00"))/86400000); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function shuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+function toast(msg){ const t=document.createElement("div"); t.className="toast"; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(),1900); }
+
+/* ================= 【6】TTS(聞くモード) =================
+ブラウザ内蔵の読み上げ(Web Speech)を使用。ネット不要・非対応環境では自動で無音スキップ。
+speak(文, 終了時関数) / stopSpeak() / cycleRate()=速度1→1.5→2→2.5→3の循環 */
+function ttsOK(){ return "speechSynthesis" in window; }
+function speak(text,onend){
+  if(!ttsOK()){ if(onend) setTimeout(onend,1200); return; }
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(String(text)); u.lang="ja-JP";
+  u.rate=P()?P().tts.rate:1;
+  if(onend){ u.onend=onend; u.onerror=onend; }
+  speechSynthesis.speak(u);
+}
+function stopSpeak(){ if(ttsOK()) speechSynthesis.cancel(); }
+function cycleRate(){ const p=P(); const i=RATES.indexOf(p.tts.rate); p.tts.rate=RATES[(i+1)%RATES.length]; save();
+  document.querySelectorAll("#rateBtn1,#rateBtn2").forEach(b=>b.textContent="🔊 "+p.tts.rate+"x"); }
+
+/* ================= 【7】レベル・XP =================
+レベルnに必要な累計XP = n×(n+1)×50。変えるなら levelOf と levelProgress の両方を直すこと。
+gainXP はconfigのxpRate倍率を掛けてから加算。grantBadge は同じバッジを二重付与しない */
+function levelOf(xp){ let n=1; while(xp>=n*(n+1)*50) n++; return n; }
+function levelProgress(xp){ const lv=levelOf(xp); const base=(lv-1)*lv*50; const next=lv*(lv+1)*50;
+  return {lv,pct:Math.min(100,Math.round((xp-base)/(next-base)*100))}; }
+function gainXP(n){ const p=P(); n=Math.ceil(n*CFG().balance.xpRate);
+  const before=levelOf(p.xp); p.xp+=n; const after=levelOf(p.xp);
+  if(after>before) setTimeout(()=>toast("🎉 レベルアップ! Lv."+after),400); updateHud(); return n; }
+function grantBadge(id){ const p=P(); if(p.badges.includes(id)) return;
+  p.badges.push(id); const b=BADGES.find(x=>x.id===id);
+  setTimeout(()=>toast((b?b.emoji+" バッジ獲得「"+b.name+"」":"バッジ獲得!")),800); }
+
+/* ================= 【8】テーマ適用・HUD・画面遷移 =================
+applyTheme … テーマのcolorsをCSS変数に流し込む(色が変わる仕組み)
+updateHud …… 上部バー(名前・Lv・XPゲージ・コイン)の更新
+show(画面id) … 画面切り替え。全画面は<body>内の <div class="screen"> */
+function applyTheme(){ const t=T(); const r=document.documentElement.style;
+  for(const[k,v]of Object.entries(t.colors||{})) r.setProperty("--"+k,v); }
+function updateHud(){ const p=P();
+  const hud=document.getElementById("hud"), nav=document.getElementById("nav");
+  if(!p){ hud.style.display="none"; nav.style.display="none"; return; }
+  const t=T(), pr=levelProgress(p.xp);
+  hud.style.display="block"; nav.style.display="block";
+  document.getElementById("hudAvatar").textContent=t.chars.guide.emoji;
+  document.getElementById("hudName").textContent=p.name;
+  document.getElementById("hudLv").textContent="Lv."+pr.lv;
+  document.getElementById("hudXp").style.width=pr.pct+"%";
+  document.getElementById("hudCoin").textContent=p.coins;
+}
+function show(id){ stopSpeak(); document.querySelectorAll(".screen").forEach(s=>s.classList.remove("on"));
+  document.getElementById(id).classList.add("on"); window.scrollTo(0,0);
+  if(id==="scrPacks") renderPacks(curSubj); }
+
+/* ================= 【9】セットアップウィザード =================
+「あたらしいぼうけんしゃ」の3ステップ:名前→テーマ選択→機体名。
+wizFinish で juken-profile@1 形式のプロフィールを作成して開始 */
+let wiz=null;
+function startWizard(){ wiz={step:1,name:"",themeId:null,machine:""}; renderWizard(); show("scrWizard"); }
+function renderWizard(){
+  const b=document.getElementById("wizBody");
+  if(wiz.step===1){
+    b.innerHTML=`<div class="card center"><div style="font-size:2.5em">👋</div><h1>きみの名前は?</h1>
+      <input type="text" id="wizName" placeholder="なまえ" value="${esc(wiz.name)}" maxlength="12">
+      <button class="big" onclick="wizNext1()">つぎへ →</button></div>`;
+  }else if(wiz.step===2){
+    const tiles=Object.values(BUILTIN_THEMES).map(t=>
+      `<div class="themeTile ${wiz.themeId===t.id?'sel':''}" style="background:${t.colors.bg}" onclick="wizPick('${t.id}')">
+        <span class="em">${t.chars.guide.emoji}</span><b>${esc(t.name)}</b></div>`).join("");
+    b.innerHTML=`<div class="center"><h1>すきな せかい をえらぼう!</h1><p class="small">${esc(wiz.name)}のせかいになるよ(あとで変えられる)</p></div>
+      <div class="center">${tiles}</div>
+      <button class="big" ${wiz.themeId?"":"disabled"} onclick="wiz.step=3;wiz.machine=BUILTIN_THEMES[wiz.themeId].ship;renderWizard()">つぎへ →</button>`;
+  }else{
+    const t=BUILTIN_THEMES[wiz.themeId];
+    b.innerHTML=`<div class="card center"><div style="font-size:2.5em">${t.chars.guide.emoji}</div>
+      <h1>きみせんようの「機体」に<br>名前をつけよう!</h1>
+      <p class="small">タイトルにずっと出る、じぶんだけのマシン名だよ</p>
+      <input type="text" id="wizMachine" value="${esc(wiz.machine)}" maxlength="14">
+      <button class="big accent" onclick="wizFinish()">🚀 ぼうけん かいし!</button></div>`;
+  }
+}
+function wizNext1(){ const v=document.getElementById("wizName").value.trim();
+  if(!v){ toast("名前を入れてね"); return; } wiz.name=v; wiz.step=2; renderWizard(); }
+function wizPick(id){ wiz.themeId=id; renderWizard(); }
+function wizFinish(){
+  const m=document.getElementById("wizMachine").value.trim()||BUILTIN_THEMES[wiz.themeId].ship;
+  const id="p"+Date.now();
+  S.profiles[id]=ensureProfile({schema:"juken-profile@1",id,name:wiz.name,grade:null,
+    themeId:wiz.themeId,machineName:m,goal:"",parentPin:null});
+  S.activeProfileId=id; save(); applyTheme(); updateHud(); renderHome(); show("scrHome");
+  toast("✨ "+m+"、しゅっこう!");
+}
+
+/* ================= 【10】プロフィール選択(起動画面) ================= */
+function renderProfiles(){
+  document.getElementById("brandTitle").textContent=CFG().brand.title;
+  const box=document.getElementById("profileList"); box.innerHTML="";
+  for(const p of Object.values(S.profiles)){
+    const t=S.themes[p.themeId]||{chars:{guide:{emoji:"🙂"}},name:""};
+    const b=document.createElement("button"); b.className="profBtn";
+    b.innerHTML=`<span class="av">${t.chars.guide.emoji}</span><span><b>${esc(p.machineName)}</b><br>
+      <span class="small">${esc(p.name)} / ${esc(t.name)} / Lv.${levelOf(p.xp)}</span></span>`;
+    b.onclick=()=>{ S.activeProfileId=p.id; rolloverDaily(); save(); applyTheme(); updateHud(); renderHome(); show("scrHome"); };
+    box.appendChild(b);
+  }
+}
+function rolloverDaily(){ const p=P(); if(p.daily.date!==today()){ p.daily={date:today(),count:0,done:false}; } }
+
+/* ================= 【11】ホーム =================
+今日のクエスト進捗・連続日数・復習待ち数を表示。
+冒頭でバックアップ警告バナー(3日ルール)を出している(判定はここ、保存処理は【21】) */
+function renderHome(){ const p=P(),t=T(); rolloverDaily();
+  const due=dueReviews().length;
+  // バックアップリマインド(3日)
+  const base=S.lastBackup||S.firstUse;
+  const gap=daysBetween(base,today());
+  document.getElementById("homeBackup").innerHTML=(gap>=3)?
+    `<div class="warn">⚠️ ${S.lastBackup?gap+"日間":""}バックアップしていません。データが消える前に保存を!
+     <button class="pill" onclick="renderData();show('scrData')">バックアップする</button></div>`:"";
+  document.getElementById("homeGreet").innerHTML=
+   `<div class="small center" style="letter-spacing:.1em">— ${esc(p.machineName)} —</div>
+    <div style="display:flex;gap:12px;align-items:center"><span style="font-size:2.6em">${t.chars.guide.emoji}</span>
+    <div><b>${esc(t.chars.guide.name)}</b><br>「${esc(p.name)}、${esc(t.words.start)}」</div></div>`;
+  const pct=Math.min(100,Math.round(p.daily.count/p.dailyGoal*100));
+  document.getElementById("homeQuest").innerHTML=
+   `<b>⭐ ${esc(t.words.quest)}</b> <span class="small">きょう ${p.daily.count} / ${p.dailyGoal} 問せいかい ${p.daily.done?"✅たっせい!":""}</span>
+    <div class="xpbar" style="margin-top:6px"><div style="width:${pct}%"></div></div>
+    <div class="small">🔥 れんぞく ${p.streak.count} 日 ${due?` / 🔁 ふくしゅう待ち <b>${due}問</b>`:""}</div>`;
+  document.getElementById("revBadge").innerHTML= due?`<span class="badgeDot">${due}</span>`:"";
+  document.getElementById("gachaHomeBtn").style.display=CFG().flags.gachaEnabled?"":"none";
+  updateHud();
+}
+
+/* ================= 【12】パック選択(★教科の追加場所) ================= */
+// ★教科タブはこの1行。増やすときは配列に追加するだけ(例:"英語")。
+//   教材JSON側の subject と文字が完全一致すればタブに表示される
+const SUBJECTS=["すべて","算数","国語","理科","社会"];
+let curSubj="すべて";
+function renderPacks(subj){
+  curSubj=subj||"すべて";
+  document.getElementById("subjTabs").innerHTML=
+    SUBJECTS.map(s=>`<button class="pill ${s===curSubj?'':'off'}" onclick="renderPacks('${s}')">${s}</button>`).join("");
+  const box=document.getElementById("packList"); box.innerHTML="";
+  const p=P();
+  const packs=Object.values(S.packs).filter(x=>curSubj==="すべて"||x.subject===curSubj);
+  if(!packs.length){ box.innerHTML=`<div class="card">この教科のパックはまだないよ。<br><span class="small">「データ」画面で教材JSONを貼り付けてね。</span></div>`; return; }
+  for(const pk of packs){
+    const div=document.createElement("div"); div.className="card";
+    let html=`<b>【${esc(pk.subject)}】${esc(pk.title)}</b> <span class="small">${pk.grade?"小"+pk.grade+"・":""}${esc(pk.source||"")}</span><br>`;
+    for(const u of pk.units||[]){
+      const done=unitDone(pk,u,p);
+      const icons={INPUT:"📖",TRAIN:"⚔️",WRITE:"✍️",TEST:"⏱️",BOSS:"👹"};
+      html+=`<button class="sub" style="margin:4px 2px;padding:9px 12px;border-radius:12px" onclick="startUnit('${pk.id}','${u.id}')">${icons[u.type]||"▶"} ${esc(u.title)} ${done?"✅":""}</button>`;
+    }
+    div.innerHTML=html; box.appendChild(div);
+  }
+}
+function unitDone(pk,u,p){
+  if(u.type==="WRITE") return p.writeLog.some(w=>w.pack===pk.id&&w.unit===u.id);
+  if(!u.questions) return false;
+  return u.questions.every(q=>{const st=p.itemStats[pk.id+":"+q.id]; return st&&st.c>0;});
+}
+function startUnit(packId,unitId){
+  const pk=S.packs[packId]; const u=(pk.units||[]).find(x=>x.id===unitId); if(!u) return;
+  if(u.type==="INPUT") return startInput(pk,u);
+  if(u.type==="WRITE") return startWrite(pk,u);
+  const items=(u.questions||[]).map(q=>({q,packId,subject:pk.subject}));
+  if(u.type==="TRAIN") return openSesSetup(pk,u,items);
+  startSession(u.type,items,{title:u.title,bossName:u.bossName,timeLimit:u.timeLimit});
+}
+
+/* ================= 【13】子セレクト(きょうのセッティング) =================
+TRAIN開始前に子どもが問題数・むずかしさ・形式を選ぶ画面。
+選べる範囲は親が決めた profile.range(設定UIは【20】親ダッシュボード)。
+launchTrain が絞り込み本体:0問になったら条件を緩めて必ず出題する */
+let sset=null;
+function openSesSetup(pk,u,items){
+  const p=P(); const r=p.range;
+  sset={pk,u,items,count:r.counts[Math.min(1,r.counts.length-1)],diff:"ふつう",fmt:"サクサク"};
+  renderSesSetup(); show("scrSesSetup");
+}
+function renderSesSetup(){
+  const r=P().range;
+  const counts=r.counts.concat(["ぜんぶ"]);
+  const diffs=["かんたん","ふつう","むずかしい"];
+  const fmts=["サクサク(タップだけ)","ぜんぶ"];
+  const pills=(arr,cur,fn)=>arr.map(v=>`<button class="pill ${String(v)===String(cur)?'':'off'}" onclick="${fn}('${v}')">${v}</button>`).join("");
+  document.getElementById("sesSetupBody").innerHTML=
+   `<div class="card"><b>⚔️ ${esc(sset.u.title)}</b>
+    <p><b>もんだい数</b><br>${pills(counts,sset.count,"ssetCount")}</p>
+    <p><b>むずかしさ</b><br>${pills(diffs,sset.diff,"ssetDiff")}</p>
+    <p><b>もんだいの形</b><br>${pills(fmts,sset.fmt.startsWith("サクサク")?fmts[0]:"ぜんぶ","ssetFmt")}</p>
+    <button class="big accent" onclick="launchTrain()">スタート!</button>
+    <p class="small">※えらべる はんい は、おうちの人ページで設定できます</p></div>`;
+}
+function ssetCount(v){ sset.count=v; renderSesSetup(); }
+function ssetDiff(v){ sset.diff=v; renderSesSetup(); }
+function ssetFmt(v){ sset.fmt=v; renderSesSetup(); }
+function launchTrain(){
+  const r=P().range;
+  const lv=r.levels.slice().sort((a,b)=>a-b);
+  const mid=lv[Math.floor((lv.length-1)/2)];
+  let allow=lv;
+  if(sset.diff==="かんたん") allow=lv.filter(x=>x<=mid);
+  if(sset.diff==="むずかしい") allow=lv.filter(x=>x>=mid);
+  let fmts=r.formats.slice();
+  if(String(sset.fmt).startsWith("サクサク")) fmts=fmts.filter(f=>f!=="input");
+  let pool=sset.items.filter(it=>allow.includes(it.q.level||1)&&fmts.includes(it.q.qtype||"choice"));
+  if(!pool.length) pool=sset.items.filter(it=>fmts.includes(it.q.qtype||"choice"));
+  if(!pool.length) pool=sset.items;
+  pool=shuffle(pool);
+  if(sset.count!=="ぜんぶ") pool=pool.slice(0,parseInt(sset.count));
+  startSession("TRAIN",pool,{title:sset.u.title,preShuffled:true});
+}
+
+/* ================= 【14】INPUT(暗記カード+きき流し) =================
+カードをめくって覚える画面。toggleFlow/flowStep が「きき流し」自動連続再生
+(表を読む→0.7秒→裏を読む→0.9秒→次のカード) */
+let inp=null;
+function startInput(pk,u){
+  inp={cards:shuffle(u.cards||[]),i:0,back:false,flow:false,title:u.title};
+  document.getElementById("inputTitle").textContent="📖 "+u.title;
+  document.getElementById("rateBtn1").textContent="🔊 "+P().tts.rate+"x";
+  renderInput(); show("scrInput");
+}
+function renderInput(){
+  const c=inp.cards[inp.i];
+  document.getElementById("inputProg").textContent=(inp.i+1)+" / "+inp.cards.length;
+  document.getElementById("inputCard").innerHTML= inp.back
+    ? `<div class="small">こたえ</div><b style="color:var(--primary)">${esc(c.back)}</b>`
+    : `<div class="small">おぼえよう</div><b>${esc(c.front)}</b>`;
+  const btn=document.getElementById("inputBtn");
+  btn.textContent= inp.back ? (inp.i+1<inp.cards.length?"つぎのカード →":"おわる(+XP)") : "こたえを見る";
+  btn.onclick=()=>{ if(inp.flow) return;
+    if(!inp.back){ inp.back=true; renderInput(); return; }
+    if(inp.i+1<inp.cards.length){ inp.i++; inp.back=false; renderInput(); }
+    else finishInput(); };
+}
+function finishInput(){ stopFlow(); const xp=gainXP(inp.cards.length*3); save();
+  showResult({title:"📖 インプットかんりょう!",lines:[`カード ${inp.cards.length}まい`,`+${xp} XP`]}); }
+function toggleFlow(){ if(inp.flow) stopFlow(); else{
+  inp.flow=true; document.getElementById("flowBtn").textContent="⏹ きき流しストップ"; flowStep(); } }
+function stopFlow(){ if(!inp) return; inp.flow=false; stopSpeak();
+  const b=document.getElementById("flowBtn"); if(b) b.textContent="🎧 きき流しスタート"; }
+function flowStep(){
+  if(!inp||!inp.flow) return;
+  const c=inp.cards[inp.i];
+  if(!inp.back){ renderInput();
+    speak(c.front,()=>setTimeout(()=>{ if(!inp.flow) return; inp.back=true; flowStep(); },700));
+  }else{ renderInput();
+    speak(c.back,()=>setTimeout(()=>{ if(!inp.flow) return;
+      if(inp.i+1<inp.cards.length){ inp.i++; inp.back=false; flowStep(); }
+      else finishInput(); },900)); }
+}
+
+/* ================= 【15】クイズエンジン(★出題形式の本体) =================
+TRAIN/TEST/BOSS/REVIEW すべてここで動く。流れ:
+  startSession → renderQ(1問表示) → ans◯◯(形式別の回答処理) → judge(共通判定) → nextQ
+【出題形式を追加する手順】※詳しくは AI_HANDOFF.md 参照
+  1.【4】FMT_NAMES に内部名と表示名を追加
+  2. renderQ の qt分岐に「その形式の画面の作り方」を追加
+  3. ans◯◯ 関数を作り、正誤を judge(true/false) に渡す
+  4. 必要ならreadQ(読み上げ文の組み立て)にも分岐を追加
+judge() が成績記録の中心:itemStats更新・復習box・モンスター・XP・コイン・バッジを全部ここで処理 */
+let ses=null, timerId=null;
+function startSession(mode,items,opt){
+  if(!items.length){ toast("問題がないよ"); return; }
+  opt=opt||{};
+  ses={mode,items:opt.preShuffled||mode==="REVIEW"?items:shuffle(items),i:0,ok:0,combo:0,maxCombo:0,xp:0,coins:0,
+    beaten:[],title:opt.title||mode,bossName:opt.bossName,timeLimit:opt.timeLimit,
+    bossHp:0,bossMax:0,answered:false,view:null};
+  if(mode==="BOSS"){ ses.bossMax=items.length*2; ses.bossHp=ses.bossMax; }
+  renderQ(); show("scrQuiz");
+}
+function renderQ(){
+  clearInterval(timerId); stopSpeak();
+  const t=T(), it=ses.items[ses.i], q=it.q, p=P();
+  ses.answered=false; ses.hintIdx=0; ses.view={};
+  let top=`<button class="ghost" onclick="quitSession()">← やめる</button> <b>${esc(ses.title)}</b>
+   <span class="small">${ses.i+1}/${ses.items.length}</span>
+   <button class="pill sub" onclick="readQ()">🔊よむ</button>
+   <button class="pill sub" id="rateBtn2" onclick="cycleRate()">🔊 ${p.tts.rate}x</button>`;
+  if(ses.combo>=2) top+=` <span class="combo">🔥${ses.combo}コンボ!</span>`;
+  if(ses.mode==="BOSS") top+=`<div class="card" style="padding:10px"><b>${t.chars.boss.emoji} ${esc(ses.bossName||t.chars.boss.name)}</b>
+    <div class="hpOut"><div class="hpIn" id="bossHp" style="width:${ses.bossHp/ses.bossMax*100}%"></div></div></div>`;
+  if(ses.mode==="TEST"&&ses.timeLimit) top+=`<div class="card center" style="padding:8px">⏱️ のこり <b id="tleft">${ses.timeLimit}</b> 秒</div>`;
+  document.getElementById("quizTop").innerHTML=top;
+  document.getElementById("quizMeta").innerHTML=
+    `<span class="tagchip">${esc(it.subject||"")}</span><span class="tagchip">${esc(q.tag||"その他")}</span>
+     <span class="tagchip">Lv.${q.level||1}</span><span class="tagchip">${FMT_NAMES[q.qtype]||q.qtype}</span>`;
+  document.getElementById("quizFeed").innerHTML="";
+  const qt=q.qtype||"choice";
+  document.getElementById("quizText").textContent= qt==="flashcard"? q.front : q.text;
+  const body=document.getElementById("quizBody"), act=document.getElementById("quizActions");
+  if(qt==="choice"){
+    const map=shuffle((q.choices||[]).map((_,i)=>i)); ses.view.map=map;
+    body.innerHTML=map.map(oi=>`<button class="choice" data-oi="${oi}" onclick="ansChoice(${oi})">${esc(q.choices[oi])}</button>`).join("");
+    act.innerHTML=hintBtn(q);
+  }else if(qt==="truefalse"){
+    body.innerHTML=`<div class="tfWrap"><button class="choice" data-tf="1" onclick="ansTF(true)">⭕</button>
+      <button class="choice" data-tf="0" onclick="ansTF(false)">❌</button></div>`;
+    act.innerHTML=hintBtn(q);
+  }else if(qt==="multi"){
+    const map=shuffle((q.choices||[]).map((_,i)=>i)); ses.view.map=map; ses.view.sel=new Set();
+    body.innerHTML=map.map(oi=>`<button class="choice" data-oi="${oi}" onclick="toggleMulti(${oi},this)">${esc(q.choices[oi])}</button>`).join("");
+    act.innerHTML=`<button class="big" onclick="ansMulti()">けってい!</button>${hintBtn(q)}`;
+  }else if(qt==="order"){
+    let pool=shuffle((q.items||[]).map((_,i)=>i));
+    if(pool.length>1&&pool.every((v,i)=>v===i)) pool=pool.reverse();
+    ses.view.pool=pool; ses.view.picked=[];
+    body.innerHTML=`<div class="small">タップしたじゅんに ならぶよ</div>
+      <div class="ordArea" id="ordPicked"></div><div id="ordPool"></div>`;
+    act.innerHTML=`<button class="big" id="ordGo" disabled onclick="ansOrder()">けってい!</button>${hintBtn(q)}`;
+    renderOrder(q);
+  }else if(qt==="flashcard"){
+    body.innerHTML=`<div class="expl" id="fcBack" style="display:none"></div>`;
+    act.innerHTML=`<button class="big" onclick="fcReveal()">こたえを見る</button>`;
+  }else{ // input
+    body.innerHTML=`<input type="text" id="ansIn" placeholder="こたえを入力">`;
+    act.innerHTML=`<button class="big" onclick="ansInput()">こたえる!</button>${hintBtn(q)}`;
+  }
+  if(p.tts.auto) readQ();
+  if(ses.mode==="TEST"&&ses.timeLimit){
+    let left=ses.timeLimit;
+    timerId=setInterval(()=>{ left--; const el=document.getElementById("tleft"); if(el) el.textContent=left;
+      if(left<=0){ clearInterval(timerId); if(!ses.answered) judge(false,"⏱️ 時間切れ!"); } },1000);
+  }
+}
+function readQ(){ const q=ses.items[ses.i].q;
+  let text=(q.qtype==="flashcard"?q.front:q.text)||"";
+  if(q.qtype==="choice"||q.qtype==="multi") text+="。"+(ses.view.map||[]).map((oi,i)=>(i+1)+"、"+q.choices[oi]).join("。");
+  speak(text); }
+function hintBtn(q){
+  if(ses.mode==="TEST"||ses.mode==="BOSS"||!q.hints||!q.hints.length) return "";
+  return `<button class="big sub" onclick="showHint()">💡 ヒントを見る</button>`;
+}
+function showHint(){ const q=ses.items[ses.i].q; const h=q.hints[Math.min(ses.hintIdx,q.hints.length-1)]; ses.hintIdx++;
+  document.getElementById("quizFeed").innerHTML=`<div class="feed" style="background:var(--bg);color:var(--text)">💡 ${esc(h)}</div>`; }
+function normalize(s){ return String(s).trim().toLowerCase()
+  .replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/\s+/g,""); }
+/* --- 各形式の回答 --- */
+function ansChoice(oi){
+  if(ses.answered) return;
+  const q=ses.items[ses.i].q; const ok=(oi===q.answer);
+  document.querySelectorAll(".choice").forEach(b=>{ b.disabled=true; const boi=+b.dataset.oi;
+    if(boi===q.answer) b.classList.add("ok"); else if(boi===oi) b.classList.add("ng"); });
+  judge(ok);
+}
+function ansTF(v){
+  if(ses.answered) return;
+  const q=ses.items[ses.i].q; const ok=(v===q.answer);
+  document.querySelectorAll(".choice").forEach(b=>{ b.disabled=true; const bv=b.dataset.tf==="1";
+    if(bv===q.answer) b.classList.add("ok"); else if(bv===v) b.classList.add("ng"); });
+  judge(ok);
+}
+function toggleMulti(oi,el){
+  if(ses.answered) return;
+  if(ses.view.sel.has(oi)){ ses.view.sel.delete(oi); el.classList.remove("sel"); }
+  else{ ses.view.sel.add(oi); el.classList.add("sel"); }
+}
+function ansMulti(){
+  if(ses.answered) return;
+  const q=ses.items[ses.i].q;
+  const want=(q.answers||[]).slice().sort().join(","), got=[...ses.view.sel].sort().join(",");
+  const ok=want===got;
+  document.querySelectorAll(".choice").forEach(b=>{ b.disabled=true; const boi=+b.dataset.oi;
+    if((q.answers||[]).includes(boi)) b.classList.add("ok");
+    else if(ses.view.sel.has(boi)) b.classList.add("ng"); });
+  judge(ok);
+}
+function renderOrder(q){
+  document.getElementById("ordPicked").innerHTML=
+    ses.view.picked.map((oi,pi)=>`<span class="tok picked" onclick="ordUnpick(${pi})">${(pi+1)}. ${esc(q.items[oi])}</span>`).join("")||`<span class="small">ここに ならぶよ</span>`;
+  document.getElementById("ordPool").innerHTML=
+    ses.view.pool.map(oi=>`<span class="tok" onclick="ordPick(${oi})">${esc(q.items[oi])}</span>`).join("");
+  document.getElementById("ordGo").disabled=ses.view.pool.length>0;
+}
+function ordPick(oi){ if(ses.answered) return; ses.view.pool=ses.view.pool.filter(x=>x!==oi); ses.view.picked.push(oi); renderOrder(ses.items[ses.i].q); }
+function ordUnpick(pi){ if(ses.answered) return; const oi=ses.view.picked.splice(pi,1)[0]; ses.view.pool.push(oi); renderOrder(ses.items[ses.i].q); }
+function ansOrder(){
+  if(ses.answered) return;
+  const q=ses.items[ses.i].q;
+  const ok=ses.view.picked.every((oi,i)=>oi===i);
+  judge(ok, ok?null:("せいかい:"+q.items.join(" → ")));
+}
+function fcReveal(){
+  const q=ses.items[ses.i].q;
+  const el=document.getElementById("fcBack"); el.style.display="block";
+  el.innerHTML=`<b>${esc(q.back)}</b>`;
+  speak(q.back);
+  document.getElementById("quizActions").innerHTML=
+   `<div class="grid2"><button class="big" style="background:var(--ok)" onclick="judge(true)">⭕ おぼえてた!</button>
+    <button class="big" style="background:var(--ng)" onclick="judge(false)">❌ まだ</button></div>`;
+}
+function ansInput(){
+  if(ses.answered) return;
+  const q=ses.items[ses.i].q; const v=normalize(document.getElementById("ansIn").value||"");
+  const cands=[q.answer].concat(q.accept||[]).map(normalize);
+  judge(cands.includes(v));
+}
+/* --- 共通判定 --- */
+function judge(ok,extraMsg){
+  ses.answered=true; clearInterval(timerId);
+  const t=T(), it=ses.items[ses.i], q=it.q, p=P();
+  const key=it.packId+":"+q.id;
+  const st=p.itemStats[key]||(p.itemStats[key]={c:0,w:0,box:0,next:today(),last:null});
+  st.last=today();
+  if(ok){ st.c++; st.box=Math.min(5,st.box+1); st.next=addDays(today(),INTERVALS[st.box]); }
+  else  { st.w++; st.box=0; st.next=today(); }
+  const tag=q.tag||"その他";
+  if(!ok){
+    const m=p.monsters[tag]||(p.monsters[tag]={name:t.monster.prefix+tag.split(":").pop(),
+      emoji:t.monster.emoji[Object.keys(p.monsters).length%t.monster.emoji.length],hp:0,maxHp:0,beaten:0});
+    m.hp++; m.maxHp=Math.max(m.maxHp,m.hp);
+  }else if(ses.mode==="REVIEW"&&p.monsters[tag]&&p.monsters[tag].hp>0){
+    const m=p.monsters[tag]; m.hp--;
+    if(m.hp<=0){ m.beaten++; p.coins+=5; ses.coins+=5; ses.beaten.push(m.emoji+m.name);
+      const tot=Object.values(p.monsters).reduce((s,x)=>s+x.beaten,0);
+      if(tot>=5) grantBadge("monster5"); }
+  }
+  let msg;
+  if(ok){
+    ses.ok++; ses.combo++; ses.maxCombo=Math.max(ses.maxCombo,ses.combo);
+    let xp=q.xp||((q.level||1)*5+5);
+    xp+=Math.min(10,Math.max(0,(ses.combo-1)*2));
+    if(ses.mode==="REVIEW") xp=Math.ceil(xp*1.5);
+    if(ses.mode==="BOSS"){ xp*=2; ses.bossHp=Math.max(0,ses.bossHp-2);
+      const bar=document.getElementById("bossHp"); if(bar) bar.style.width=(ses.bossHp/ses.bossMax*100)+"%"; }
+    p.coins++; ses.coins++;
+    const got=gainXP(xp); ses.xp+=got;
+    p.daily.count++;
+    if(!p.daily.done&&p.daily.count>=p.dailyGoal){ p.daily.done=true; p.coins+=10; ses.coins+=10;
+      updateStreak(); toast("⭐ 今日のクエスト達成! +10🪙"); }
+    if(ses.combo>=5) grantBadge("combo5");
+    if(ses.combo>=10) grantBadge("combo10");
+    const totalOk=Object.values(p.itemStats).reduce((s,x)=>s+x.c,0);
+    if(totalOk>=100) grantBadge("q100");
+    const lines=t.chars.guide.correct;
+    msg=`<div class="feed ok">⭕ ${esc(lines[Math.floor(Math.random()*lines.length)])} <b>+${got}XP</b> +1🪙</div>`;
+  }else{
+    ses.combo=0;
+    const lines=t.chars.guide.wrong;
+    msg=`<div class="feed ng">${extraMsg?esc(extraMsg)+"<br>":""}❌ ${esc(lines[Math.floor(Math.random()*lines.length)])}
+     <div class="small" style="font-weight:normal">${esc(t.monster.prefix)}モンスターが強くなった…ふくしゅうでたおそう!</div></div>`;
+  }
+  if(q.explanation) msg+=`<div class="expl">📘 ${esc(q.explanation)}</div>`;
+  document.getElementById("quizFeed").innerHTML=msg;
+  document.getElementById("quizActions").innerHTML=
+    `<button class="big" onclick="nextQ()">${ses.i+1<ses.items.length?"つぎへ →":"けっかを見る"}</button>`;
+  save();
+}
+function nextQ(){ if(ses.i+1<ses.items.length){ ses.i++; renderQ(); } else endSession(); }
+function quitSession(){ clearInterval(timerId); stopSpeak(); if(ses&&ses.i>0) endSession(); else show("scrPacks"); }
+function endSession(){
+  clearInterval(timerId); stopSpeak();
+  const p=P(), t=T();
+  p.history.push({d:today(),pack:ses.title,mode:ses.mode,ok:ses.ok,total:ses.items.length,xp:ses.xp});
+  if(p.history.length>200) p.history=p.history.slice(-200);
+  grantBadge("first_clear");
+  const lines=[`せいかい ${ses.ok} / ${ses.items.length}`,`さいだいコンボ ${ses.maxCombo}`,`+${ses.xp} XP / +${ses.coins} 🪙`];
+  let title="⚔️ クエストしゅうりょう!";
+  if(ses.mode==="BOSS"){
+    if(ses.bossHp<=0){ title=t.chars.boss.emoji+" ボスをたおした!"; p.coins+=20; lines.push("ボス報酬 +20🪙"); grantBadge("boss1"); }
+    else title=t.chars.boss.emoji+" ボスは生きている…また挑戦しよう!";
+  }
+  if(ses.mode==="REVIEW") title="🔁 ふくしゅうかんりょう!";
+  if(ses.mode==="TEST") title="⏱️ テストしゅうりょう!";
+  if(ses.beaten.length) lines.push("討伐:"+ses.beaten.join("、"));
+  save(); showResult({title,lines});
+}
+function updateStreak(){ const p=P(), y=addDays(today(),-1);
+  p.streak.count=(p.streak.last===y)?p.streak.count+1:1;
+  p.streak.last=today();
+  if(p.streak.count>=3) grantBadge("streak3");
+  if(p.streak.count>=7) grantBadge("streak7"); }
+function showResult(r){
+  document.getElementById("resultBody").innerHTML=
+   `<div style="font-size:3em">${T().chars.reward.emoji}</div><h1>${r.title}</h1>`+
+   r.lines.map(l=>`<p>${l}</p>`).join("");
+  renderHome(); show("scrResult");
+}
+
+/* ================= 【16】REVIEW(復習) =================
+dueReviews が「今日が期限の問題」を最大20問集める(box5=卒業は出ない)。
+間隔は【4】INTERVALS、boxの上げ下げは judge 内 */
+function qIndex(){ const idx={};
+  for(const pk of Object.values(S.packs)) for(const u of pk.units||[])
+    for(const q of u.questions||[]) idx[pk.id+":"+q.id]={q,packId:pk.id,subject:pk.subject};
+  return idx; }
+function dueReviews(){ const p=P(); if(!p) return [];
+  const idx=qIndex(); const td=today(); const out=[];
+  for(const[key,st]of Object.entries(p.itemStats)){
+    if(st.box>=5) continue;
+    if(st.next<=td&&idx[key]) out.push({key,st,item:idx[key]});
+  }
+  out.sort((a,b)=>a.st.next<b.st.next?-1:1);
+  return out.slice(0,20); }
+function startReview(){
+  const due=dueReviews();
+  if(!due.length){ toast(T().chars.review.emoji+" ふくしゅうはぜんぶ完了!えらい!"); return; }
+  startSession("REVIEW",due.map(d=>d.item),{title:T().chars.review.emoji+" ふくしゅうタイム"});
+}
+
+/* ================= 【17】WRITE(紙でやる手書き課題) =================
+紙で実施→チェックを全部ON→完了でXP。写真はAIに見せて添削する運用 */
+function startWrite(pk,u){
+  const task=u.paperTask||{};
+  document.getElementById("writeTitle").textContent="✍️ "+u.title;
+  const cps=(task.checkPoints||[]).map(c=>`<label class="check"><input type="checkbox" class="wcp"> ${esc(c)}</label>`).join("");
+  document.getElementById("writeBody").innerHTML=
+   `<p><b>やること(紙で!)</b><br>${esc(task.instructions||"")}</p>${cps}
+    <div class="expl">📷 ${esc(task.aiHint||"できたら写真にとって、AIに見せて添削してもらおう!")}</div>
+    <button class="big" onclick="finishWrite('${pk.id}','${u.id}',${task.xp||30})">ぜんぶできた!(+${task.xp||30}XP)</button>`;
+  show("scrWrite");
+}
+function finishWrite(packId,unitId,xp){
+  const boxes=[...document.querySelectorAll(".wcp")];
+  if(boxes.length&&!boxes.every(b=>b.checked)){ toast("チェックがまだ残ってるよ!"); return; }
+  const p=P(); p.writeLog.push({d:today(),pack:packId,unit:unitId,title:document.getElementById("writeTitle").textContent});
+  const got=gainXP(xp); p.coins+=3;
+  if(p.writeLog.length>=5) grantBadge("write5");
+  save(); showResult({title:"✍️ 手書きクエストかんりょう!",lines:[`+${got} XP / +3 🪙`,"よくがんばりました!"]});
+}
+
+/* ================= 【18】モンスター図鑑・弱点 =================
+モンスターは「タグごと」に1体。間違えるとHP+1、REVIEWで正解するとHP-1、0で討伐。
+weakTags = 3回以上挑戦して正答率60%未満のタグ(親ページにも表示) */
+function renderMonsters(){
+  const p=P(); const box=document.getElementById("monsterBody");
+  const alive=Object.entries(p.monsters).filter(([,m])=>m.hp>0);
+  const beaten=Object.entries(p.monsters).filter(([,m])=>m.beaten>0);
+  let html=`<div class="card"><h2>いま いるモンスター</h2>`;
+  if(!alive.length) html+=`<p class="small">モンスターはいないよ。へいわだね!</p>`;
+  for(const[tag,m]of alive){
+    html+=`<div class="mon"><span class="em">${m.emoji}</span><div style="flex:1"><b>${esc(m.name)}</b> <span class="tagchip">${esc(tag)}</span>
+      <div class="hpOut"><div class="hpIn" style="width:${m.hp/m.maxHp*100}%"></div></div>
+      <span class="small">HP ${m.hp} — ふくしゅうで正解するとダメージ!</span></div></div>`;
+  }
+  html+=`</div>`;
+  const weak=weakTags(p);
+  html+=`<div class="card"><h2>⚠️ 弱点チェック</h2>`;
+  html+= weak.length? weak.map(w=>`<div>🔻 <b>${esc(w.tag)}</b> <span class="small">正答率 ${w.rate}%(${w.c}/${w.n}問)</span></div>`).join("")
+    : `<p class="small">大きな弱点はないよ。すごい!</p>`;
+  html+=`</div>`;
+  html+=`<div class="card"><h2>🏅 バッジ</h2>`+BADGES.map(b=>
+    `<span class="tagchip ${p.badges.includes(b.id)?"":"locked"}" title="${esc(b.desc)}">${b.emoji}${esc(b.name)}</span>`).join("")+`</div>`;
+  if(beaten.length) html+=`<div class="card"><h2>⚔️ 討伐ずみ</h2>`+beaten.map(([tag,m])=>`<span class="tagchip">${m.emoji}${esc(m.name)} ×${m.beaten}</span>`).join("")+`</div>`;
+  box.innerHTML=html;
+}
+function weakTags(p){
+  const idx=qIndex(); const agg={};
+  for(const[key,st]of Object.entries(p.itemStats)){
+    const it=idx[key]; if(!it) continue;
+    const tag=it.q.tag||"その他";
+    const a=agg[tag]||(agg[tag]={c:0,n:0});
+    a.c+=st.c; a.n+=st.c+st.w;
+  }
+  return Object.entries(agg).filter(([,a])=>a.n>=3&&a.c/a.n<0.6)
+    .map(([tag,a])=>({tag,c:a.c,n:a.n,rate:Math.round(a.c/a.n*100)}))
+    .sort((x,y)=>x.rate-y.rate);
+}
+
+/* ================= 【19】ガチャ =================
+1回10コイン。確率は【1】configのgachaRates。景品はテーマごと(【2】のgacha配列) */
+function renderGacha(msgHtml){
+  const p=P(), t=T();
+  if(!CFG().flags.gachaEnabled){ document.getElementById("gachaBody").innerHTML=`<div class="card">このバージョンではガチャは使えません。</div>`; return; }
+  const items=t.gacha||[];
+  const grid=items.map(g=>{
+    const n=p.collection[g.id]||0;
+    return `<div class="gachaItem ${n?"":"locked"}"><span class="em">${g.emoji}</span><br><b class="rar${g.rarity}">${g.rarity}</b> ${esc(g.name)}${n>1?" ×"+n:""}</div>`;
+  }).join("");
+  document.getElementById("gachaBody").innerHTML=
+   `<div class="card center">${msgHtml||`<span style="font-size:2.5em">${t.chars.reward.emoji}</span><br>1回 <b>10🪙</b>(いま ${p.coins}🪙)`}
+    <button class="big accent" ${p.coins<10?"disabled":""} onclick="rollGacha()">🎁 ガチャをまわす!</button></div>
+    <div class="card"><h2>コレクション</h2>${grid}</div>`;
+}
+function rollGacha(){
+  const p=P(), t=T(); if(p.coins<10) return;
+  p.coins-=10;
+  const rates=CFG().balance.gachaRates;
+  let r=Math.random()*100, rar="N";
+  for(const[k,w]of Object.entries(rates)){ if(r<w){rar=k;break;} r-=w; }
+  const pool=(t.gacha||[]).filter(g=>g.rarity===rar);
+  const g=pool.length?pool[Math.floor(Math.random()*pool.length)]:(t.gacha||[])[0];
+  const dup=(p.collection[g.id]||0)>0;
+  p.collection[g.id]=(p.collection[g.id]||0)+1;
+  let msg=`<div style="animation:pop .5s"><span style="font-size:3.4em">${g.emoji}</span><br><b class="rar${g.rarity}">【${g.rarity}】${esc(g.name)}</b>`;
+  if(dup){ p.coins+=3; msg+=`<br><span class="small">かぶったので +3🪙 へんきゃく!</span>`; }
+  msg+=`</div>`;
+  save(); updateHud(); renderGacha(msg);
+}
+
+/* ================= 【20】親ダッシュボード =================
+PINで保護(未設定なら素通し)。成績サマリー・7日履歴・教科別正答率・弱点タグ、
+出題レンジ設定(saveRange)、成績のみリセット(resetStats)、プロフィール削除 */
+function openParent(){
+  const p=P();
+  if(p.parentPin){ const v=prompt("PINを入力してください"); if(v!==p.parentPin){ toast("PINがちがいます"); return; } }
+  renderParent(); show("scrParent");
+}
+function renderParent(){
+  const p=P(); const td=today();
+  const days=[...Array(7)].map((_,i)=>addDays(td,-(6-i)));
+  const h7=p.history.filter(h=>days.includes(h.d));
+  const idx=qIndex(); const bySub={};
+  for(const[key,st]of Object.entries(p.itemStats)){
+    const it=idx[key]; if(!it) continue;
+    const s=bySub[it.subject]||(bySub[it.subject]={c:0,n:0});
+    s.c+=st.c; s.n+=st.c+st.w;
+  }
+  const weak=weakTags(p);
+  const due=dueReviews().length;
+  const lvChk=[1,2,3,4,5].map(l=>`<label class="checkS"><input type="checkbox" class="rgLv" value="${l}" ${p.range.levels.includes(l)?"checked":""}>Lv${l}</label>`).join("");
+  const ctChk=[5,10,15,20].map(c=>`<label class="checkS"><input type="checkbox" class="rgCt" value="${c}" ${p.range.counts.includes(c)?"checked":""}>${c}問</label>`).join("");
+  const fmChk=Object.entries(FMT_NAMES).map(([k,n])=>`<label class="checkS"><input type="checkbox" class="rgFm" value="${k}" ${p.range.formats.includes(k)?"checked":""}>${n}</label>`).join("");
+  let html=`<div class="card"><h2>${esc(p.name)}(${esc(p.machineName)})の学習状況</h2>
+    <p>Lv.${levelOf(p.xp)} / 累計XP ${p.xp} / 🪙${p.coins} / 🔥連続${p.streak.count}日</p>
+    <p>復習待ち:<b>${due}問</b> / 今日:${p.daily.count}問正解</p></div>`;
+  html+=`<div class="card"><h2>🎚️ 出題レンジ設定(親)</h2>
+    <p class="small">子どもはこの範囲の中から「きょうのセッティング」で選びます。</p>
+    <p><b>むずかしさ(レベル)</b><br>${lvChk}</p>
+    <p><b>問題数のえらびかた</b><br>${ctChk}</p>
+    <p><b>ゆるす出題形式</b><br>${fmChk}</p>
+    <p><b>1日の目標</b> <input type="text" id="rgGoal" value="${p.dailyGoal}" style="width:70px;display:inline-block"> 問</p>
+    <button class="big" onclick="saveRange()">この設定をほぞん</button></div>`;
+  html+=`<div class="card"><h2>直近7日のセッション</h2>`;
+  html+= h7.length? `<table><tr><th>日付</th><th>内容</th><th>正答</th><th>XP</th></tr>`+
+    h7.slice(-15).reverse().map(h=>`<tr><td>${h.d.slice(5)}</td><td>${esc(h.pack)}(${h.mode})</td><td>${h.ok}/${h.total}</td><td>${h.xp}</td></tr>`).join("")+`</table>`
+    : `<p class="small">この7日間の記録はまだありません。</p>`;
+  html+=`</div>`;
+  html+=`<div class="card"><h2>教科別 正答率(累計)</h2><table><tr><th>教科</th><th>正答率</th><th>回答数</th></tr>`+
+    Object.entries(bySub).map(([s,a])=>`<tr><td>${esc(s)}</td><td>${a.n?Math.round(a.c/a.n*100):0}%</td><td>${a.n}</td></tr>`).join("")+`</table></div>`;
+  html+=`<div class="card"><h2>⚠️ 弱点タグ(正答率60%未満)</h2>`+
+    (weak.length? weak.map(w=>`<div>🔻 <b>${esc(w.tag)}</b>:${w.rate}%(${w.n}問中${w.c}問)</div>`).join("")
+     : `<p class="small">現在なし</p>`)+
+    `<p class="small">→ タグ名をコピーしてAIに「このタグの弱点パックを作って」と頼むと復習教材が作れます。</p></div>`;
+  html+=`<div class="card"><h2>✍️ 手書き課題ログ</h2>`+
+    (p.writeLog.length? p.writeLog.slice(-8).reverse().map(w=>`<div>${w.d.slice(5)} ${esc(w.title)}</div>`).join("")
+     : `<p class="small">まだありません</p>`)+`</div>`;
+  html+=`<div class="card"><h2>🔐 管理</h2>
+    <button class="big sub" onclick="setPin()">PINを設定/変更する</button>
+    <button class="big sub" onclick="resetStats()">この子の成績だけリセット(名前・テーマは残す)</button>
+    <button class="big" style="background:var(--ng)" onclick="deleteProfile()">このプロフィールを削除</button></div>`;
+  document.getElementById("parentBody").innerHTML=html;
+}
+function saveRange(){
+  const p=P();
+  const lv=[...document.querySelectorAll(".rgLv:checked")].map(x=>+x.value);
+  const ct=[...document.querySelectorAll(".rgCt:checked")].map(x=>+x.value);
+  const fm=[...document.querySelectorAll(".rgFm:checked")].map(x=>x.value);
+  if(!lv.length||!ct.length||!fm.length){ toast("各項目1つ以上選んでください"); return; }
+  p.range={levels:lv,counts:ct,formats:fm};
+  const g=parseInt(document.getElementById("rgGoal").value); if(g>0) p.dailyGoal=g;
+  save(); toast("✅ レンジ設定を保存しました");
+}
+function setPin(){ const p=P(); const v=prompt("新しいPIN(数字4桁など)。空にすると解除",p.parentPin||"");
+  if(v===null) return; p.parentPin=v.trim()||null; save(); toast(p.parentPin?"PINを設定しました":"PINを解除しました"); }
+function resetStats(){
+  if(!confirm("成績・XP・モンスター等をリセットします。名前とテーマは残ります。よろしいですか?")) return;
+  const p=P();
+  Object.assign(p,{xp:0,coins:0,badges:[],collection:{},itemStats:{},monsters:{},history:[],writeLog:[],
+    daily:{date:today(),count:0,done:false},streak:{last:null,count:0}});
+  save(); updateHud(); toast("リセットしました"); renderParent();
+}
+function deleteProfile(){
+  if(!confirm("このプロフィールを完全に削除します。元に戻せません。よろしいですか?")) return;
+  delete S.profiles[S.activeProfileId]; S.activeProfileId=null;
+  save(); renderProfiles(); show("scrProfiles");
+}
+
+/* ================= 【21】データ管理(★教材JSON登録・★バックアップ) =================
+・doImport ……… 貼り付けたJSONのschemaを見て自動振り分け:
+    juken-pack@1(教材) / juken-theme@1(テーマ) / juken-profile@1 / juken-config@1(版切替)
+    同じidは上書き=教材の改訂。エディションのフラグで追加可否を制御
+・downloadBackup … 全データをファイル保存(jukenquest_backup_日付.json)
+・exportAll/restoreAll … テキストでの書き出し/全復元(機種変更用)
+・markBackup ……… バックアップ日を記録(3日バナーの基準) */
+function renderData(){
+  const c=CFG();
+  const edNames={play:"すぐ遊べる版",custom:"おうちカスタム版",platform:"プラットフォーム版"};
+  const gap=S.lastBackup?daysBetween(S.lastBackup,today()):null;
+  let html=`<div class="card"><b>エディション:${edNames[c.edition]||c.edition}</b><br>
+    <span class="small">最終バックアップ:${S.lastBackup?S.lastBackup+"("+gap+"日前)":"まだ一度もしていません"}</span></div>`;
+  html+=`<div class="card"><h2>💾 バックアップ(重要)</h2>
+    <p class="small">ブラウザのデータは消えることがあります。3日に1回は保存を。</p>
+    <button class="big" onclick="downloadBackup()">📥 ファイルとしてダウンロード保存</button>
+    <button class="big sub" onclick="exportAll()">📋 テキストで書き出す(下の欄に出ます)</button>
+    <textarea id="exportBox" placeholder="書き出し結果 / 復元時はここにバックアップを貼る"></textarea>
+    <button class="big sub" onclick="restoreAll()">この内容で全復元する</button></div>`;
+  if(c.flags.canAddMaterial||c.flags.canEditTheme){
+    html+=`<div class="card"><h2>📚 JSONを貼り付けて登録</h2>
+      <p class="small">教材パック${c.flags.canEditTheme?"・テーマパック":""}・プロフィール・設定(config)のJSONを貼ると自動判別します。同じidは上書き(改訂)。</p>
+      <textarea id="importBox" placeholder='{"schema":"juken-pack@1", ...}'></textarea>
+      <button class="big" onclick="doImport()">登録する</button>
+      <div id="importMsg" class="small"></div></div>`;
+  }else{
+    html+=`<div class="card"><h2>📚 教材の追加</h2><p class="small">このエディションでは教材の追加・差し替えはできません(同梱教材のみ)。上位版で解放されます。</p></div>`;
+  }
+  if(c.flags.canBrand){
+    html+=`<div class="card"><h2>🏷️ ブランディング(platform)</h2>
+      <p class="small">タイトル画面のアプリ名を変更できます(塾名など)。</p>
+      <input type="text" id="brandIn" value="${esc(c.brand.title)}">
+      <button class="big" onclick="saveBrand()">タイトルを保存</button></div>`;
+  }
+  html+=`<div class="card"><h2>⚠️ 危険な操作</h2>
+    <button class="big" style="background:var(--ng)" onclick="if(confirm('本当に全データを消しますか?')){localStorage.removeItem(KEY);location.reload();}">全データ初期化(工場出荷)</button></div>`;
+  document.getElementById("dataBody").innerHTML=html;
+}
+function doImport(){
+  const box=document.getElementById("importBox"), msg=document.getElementById("importMsg");
+  const c=CFG();
+  let obj;
+  try{ obj=JSON.parse(box.value); }
+  catch(e){ msg.textContent="❌ JSONの形式エラー:"+e.message; return; }
+  const list=Array.isArray(obj)?obj:[obj];
+  let done=[];
+  for(const o of list){
+    if(!o||!o.schema){ msg.textContent="❌ schema が必要です"; return; }
+    if(o.schema==="juken-pack@1"){
+      if(!c.flags.canAddMaterial){ msg.textContent="❌ このエディションでは教材追加不可です"; return; }
+      if(!o.id){ msg.textContent="❌ id が必要です"; return; }
+      S.packs[o.id]=o; done.push("教材「"+(o.title||o.id)+"」");
+    }else if(o.schema==="juken-theme@1"){
+      if(!c.flags.canEditTheme){ msg.textContent="❌ このエディションではテーマ追加不可です"; return; }
+      S.themes[o.id]=o; done.push("テーマ「"+(o.name||o.id)+"」");
+    }else if(o.schema==="juken-profile@1"){
+      if(S.profiles[o.id]) Object.assign(S.profiles[o.id],o); else S.profiles[o.id]=o;
+      ensureProfile(S.profiles[o.id]); done.push("プロフィール「"+(o.name||o.id)+"」");
+    }else if(o.schema==="juken-config@1"){
+      S.config=o; done.push("設定(edition:"+(o.edition||"?")+")");
+    }else{ msg.textContent="❌ 未対応のschema:"+o.schema; return; }
+  }
+  save(); if(S.activeProfileId){ applyTheme(); updateHud(); }
+  renderProfiles(); renderData();
+  toast("✅ 登録完了!");
+  const m=document.getElementById("importMsg"); if(m) m.textContent="✅ 登録しました:"+done.join(" / ");
+}
+function markBackup(){ S.lastBackup=today(); save(); }
+function downloadBackup(){
+  const blob=new Blob([JSON.stringify(S)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="jukenquest_backup_"+today()+".json";
+  document.body.appendChild(a); a.click(); a.remove();
+  markBackup(); renderData(); toast("✅ ダウンロードしました");
+}
+function exportAll(){ document.getElementById("exportBox").value=JSON.stringify(S);
+  markBackup(); toast("書き出しました(全選択→コピーして保管)"); }
+function restoreAll(){
+  try{ const obj=JSON.parse(document.getElementById("exportBox").value);
+    if(!obj.profiles) throw new Error("形式が違います");
+    S=obj; save(); location.reload();
+  }catch(e){ toast("❌ 復元できません:"+e.message); }
+}
+function saveBrand(){ if(!S.config) S.config=JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  S.config.brand=S.config.brand||{}; S.config.brand.title=document.getElementById("brandIn").value.trim()||"受験クエストOS";
+  save(); renderProfiles(); toast("✅ タイトルを保存しました"); }
+
+/* ================= 【22】起動 =================
+load()→プロフィールがあれば続きから、1人もいなければウィザードへ */
+load();
+renderProfiles();
+if(S.activeProfileId&&S.profiles[S.activeProfileId]){
+  rolloverDaily(); applyTheme(); updateHud(); renderHome(); show("scrHome");
+}else if(Object.keys(S.profiles).length===0){
+  startWizard();
+}else{
+  show("scrProfiles");
+}
+</script>
+</body>
+</html>
