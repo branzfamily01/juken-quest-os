@@ -211,6 +211,7 @@ td,th{padding:6px 4px; border-bottom:1px solid #e5eef0; text-align:left;}
     <button class="pill sub" id="lisPlayBtn" onclick="toggleListen()">▶ スタート</button>
     <button class="pill sub" id="rateBtn3" onclick="cycleRate()">🔊 1x</button>
     <button class="pill sub" onclick="lisSkip()">⏭ つぎへ</button>
+    <button class="pill sub" id="lisMarkBtn" onclick="toggleLisMark()">❓おぼえてない</button>
   </div>
   <p class="small center" id="lisProg"></p>
   <div class="card" id="lisCard"></div>
@@ -486,6 +487,7 @@ function ensureProfile(p){
   if(!S.themes[p.themeId]) p.themeId="theme_ocean";
   if(!p.range) p.range={levels:c.parentRange.levels.slice(),counts:c.parentRange.counts.slice(),formats:c.parentRange.formats.slice()};
   if(!p.tts) p.tts={rate:1,auto:false};
+  if(!p.listenMarks) p.listenMarks=[]; // ❓おぼえてないチェック(packId:qId の配列)
   if(p.dailyGoal==null) p.dailyGoal=c.balance.dailyGoalDefault;
   for(const[k,v]of Object.entries({xp:0,coins:0,badges:[],collection:{},itemStats:{},monsters:{},history:[],writeLog:[]}))
     if(p[k]==null) p[k]=Array.isArray(v)?[]:(typeof v==="object"?{}:v);
@@ -656,6 +658,14 @@ function renderPacks(subj){
   allBtn.textContent="🎧 表示中のクエストをぜんぶきき流し(総ざらい)";
   allBtn.onclick=()=>startSubjectListen(packs);
   box.appendChild(allBtn);
+  const mk=(P().listenMarks||[]).length;
+  if(mk){
+    const mkBtn=document.createElement("button");
+    mkBtn.className="big accent";
+    mkBtn.textContent=`❓ チェックした問題をきき流す(${mk}問)`;
+    mkBtn.onclick=()=>startMarkedListen();
+    box.appendChild(mkBtn);
+  }
   for(const pk of packs){
     const div=document.createElement("div"); div.className="card";
     let html=`<b>【${esc(pk.subject)}】${esc(pk.title)}</b> <span class="small">${pk.grade?"小"+pk.grade+"・":""}${esc(pk.source||"")}</span><br>`;
@@ -821,6 +831,22 @@ function renderListen(showA,showE){
   document.getElementById("lisCard").innerHTML=html;
   document.getElementById("lisCheer").style.display="none";
   document.getElementById("lisPlayBtn").textContent=lis.playing?"⏹ ストップ":"▶ スタート";
+  updateLisMarkBtn();
+}
+// 現在の問題のチェック用キー(itemStatsと同じ packId:qId 形式)
+function lisKey(){ const it=lis&&lis.items[lis.i]; return it?(it.packId+":"+it.q.id):null; }
+function updateLisMarkBtn(){
+  const b=document.getElementById("lisMarkBtn"); if(!b) return;
+  const k=lisKey(); if(!k) return;
+  b.textContent=P().listenMarks.includes(k)?"✅チェック中(押すと解除)":"❓おぼえてない";
+}
+// ❓ボタン:読み上げを止めずにその場でマーク/解除できる
+function toggleLisMark(){
+  const k=lisKey(); if(!k) return;
+  const p=P(); const i=p.listenMarks.indexOf(k);
+  if(i>=0){ p.listenMarks.splice(i,1); toast("チェックを外したよ"); }
+  else{ p.listenMarks.push(k); toast("❓あとでもう一回きくリストに入れたよ"); }
+  save(); updateLisMarkBtn();
 }
 function toggleListen(){ if(!lis) return;
   if(lis.playing){ stopListen(); }
@@ -868,15 +894,33 @@ function lisSkip(){ if(!lis) return; stopSpeak();
   if(lis.i+1>=lis.items.length){ finishListen(); return; }
   lis.i++;
   if(lis.playing) lisStepQ(); else renderListen(false,false); }
+let lastMarkedItems=[];
 function finishListen(){
   if(!lis) return;
   const p=P(),t=T(); const n=lis.items.length;
+  // この回でチェックが付いている問題(前からのチェック含む)を再聴用に控える
+  lastMarkedItems=lis.items.filter(it=>p.listenMarks.includes(it.packId+":"+it.q.id));
   stopListen();
   const xp=gainXP(n*2); save();
-  showResult({title:"🎧 きき流し特訓かんりょう!",
-    lines:[esc(p.name)+"、よくがんばった! by "+esc(t.chars.guide.name),
-           n+"問ぶんを耳でインプットしたよ",`+${xp} XP`]});
+  const lines=[esc(p.name)+"、よくがんばった! by "+esc(t.chars.guide.name),
+    n+"問ぶんを耳でインプットしたよ",`+${xp} XP`];
+  if(lastMarkedItems.length){
+    lines.push(`❓チェック ${lastMarkedItems.length}問`);
+    lines.push(`<button class="big accent" onclick="restartMarkedListen()">❓チェックした問題だけ もう一回きく</button>`);
+  }
+  showResult({title:"🎧 きき流し特訓かんりょう!",lines});
   lis=null;
+}
+function restartMarkedListen(){
+  if(!lastMarkedItems.length) return;
+  startListen(lastMarkedItems.slice(),"❓チェックした問題");
+}
+// 保存済みチェック全体からきき流しを開始(パック一覧の入口用)
+function startMarkedListen(){
+  const idx=qIndex(); const p=P();
+  const items=p.listenMarks.map(k=>idx[k]).filter(Boolean);
+  if(!items.length){ toast("チェックした問題はないよ"); return; }
+  startListen(items,"❓チェックした問題");
 }
 // パック一覧の「ぜんぶきき流し」:表示中パックの全問題(TRAIN/TEST/BOSS)を集めて開始
 function startSubjectListen(packs){
@@ -912,6 +956,7 @@ function renderQ(){
   let top=`<button class="ghost" onclick="quitSession()">← やめる</button> <b>${esc(ses.title)}</b>
    <span class="small">${ses.i+1}/${ses.items.length}</span>
    <button class="pill sub" onclick="readQ()">🔊よむ</button>
+   <button class="pill sub" id="autoBtn" onclick="toggleAuto()">🎧じどう ${p.tts.auto?"ON":"OFF"}</button>
    <button class="pill sub" id="rateBtn2" onclick="cycleRate()">🔊 ${p.tts.rate}x</button>`;
   if(ses.combo>=2) top+=` <span class="combo">🔥${ses.combo}コンボ!</span>`;
   if(ses.mode==="BOSS") top+=`<div class="card" style="padding:10px"><b>${t.chars.boss.emoji} ${esc(ses.bossName||t.chars.boss.name)}</b>
@@ -1077,10 +1122,30 @@ function judge(ok,extraMsg){
      <div class="small" style="font-weight:normal">${esc(t.monster.prefix)}モンスターが強くなった…ふくしゅうでたおそう!</div></div>`;
   }
   if(q.explanation) msg+=`<div class="expl">📘 ${esc(q.explanation)}</div>`;
+  msg+=`<div class="center"><button class="pill sub" onclick="speakFeedback()">🔊 こたえと かいせつを きく</button></div>`;
+  lastFB={ok,q};
   document.getElementById("quizFeed").innerHTML=msg;
+  if(p.tts.auto) speakFeedback();
   document.getElementById("quizActions").innerHTML=
     `<button class="big" onclick="nextQ()">${ses.i+1<ses.items.length?"つぎへ →":"けっかを見る"}</button>`;
   save();
+}
+// 直前の判定結果を読み上げる(こたえ→かいせつの順)。listenAnswerSpeechは【14b】と共通
+let lastFB=null;
+function speakFeedback(){
+  if(!lastFB) return;
+  const q=lastFB.q;
+  let text=(lastFB.ok?"せいかい!":"ざんねん。")+"こたえは、"+listenAnswerSpeech(q)+"。";
+  if(q.explanation) text+="かいせつ。"+q.explanation;
+  speak(text);
+}
+// 🎧じどうトグル:ONだと問題文もこたえ・かいせつも自動で読み上げる
+function toggleAuto(){
+  const p=P(); p.tts.auto=!p.tts.auto; save();
+  const b=document.getElementById("autoBtn");
+  if(b) b.textContent="🎧じどう "+(p.tts.auto?"ON":"OFF");
+  toast(p.tts.auto?"🎧 自動読み上げON(問題もこたえも読むよ)":"自動読み上げOFF");
+  if(p.tts.auto&&!ses.answered) readQ();
 }
 function nextQ(){ if(ses.i+1<ses.items.length){ ses.i++; renderQ(); } else endSession(); }
 function quitSession(){ clearInterval(timerId); stopSpeak(); if(ses&&ses.i>0) endSession(); else show("scrPacks"); }
